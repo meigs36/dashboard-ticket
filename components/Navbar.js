@@ -20,12 +20,19 @@ export default function Navbar() {
   const [theme, setTheme] = useState('light')
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Clienti', href: '/clienti', icon: Users },
-    { name: 'Macchinari', href: '/macchinari', icon: HardDrive },
-    { name: 'Ticket', href: '/ticket', icon: Ticket },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  ]
+  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Clienti', href: '/clienti', icon: Users },
+  { name: 'Macchinari', href: '/macchinari', icon: HardDrive },
+  { name: 'Ticket', href: '/ticket', icon: Ticket },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+]
+
+// Aggiungi link Utenti solo per admin
+const adminNavigation = userProfile?.ruolo === 'admin' 
+  ? [{ name: 'Utenti', href: '/utenti', icon: Settings }]
+  : []
+
+const allNavigation = [...navigation, ...adminNavigation]
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -63,7 +70,7 @@ export default function Navbar() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex md:ml-10 md:space-x-1">
-              {navigation.map((item) => {
+              {allNavigation.map((item) => {
                 const Icon = item.icon
                 const active = isActive(item.href)
                 return (
@@ -181,7 +188,7 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-gray-200 dark:border-gray-700">
           <div className="px-2 pt-2 pb-3 space-y-1">
-            {navigation.map((item) => {
+            {allNavigation.map((item) => {
               const Icon = item.icon
               const active = isActive(item.href)
               return (
