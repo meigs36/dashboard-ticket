@@ -62,22 +62,22 @@ export default function DashboardAdmin() {
 
   async function loadMiniChart() {
     try {
-      const { data } = await supabase
+      const { data: ticketsData } = await supabase
         .from('ticket')
         .select('data_apertura')
         .order('data_apertura', { ascending: true })
 
-      if (data && data.length > 0) {
+      if (ticketsData && ticketsData.length > 0) {
         // Ultimi 7 giorni
         const oggi = new Date()
         const chartData = []
         
         for (let i = 6; i >= 0; i--) {
-          const data = new Date(oggi)
-          data.setDate(data.getDate() - i)
-          const dataStr = data.toISOString().split('T')[0]
+          const currentDate = new Date(oggi)
+          currentDate.setDate(currentDate.getDate() - i)
+          const dataStr = currentDate.toISOString().split('T')[0]
           
-          const count = data.filter(t => {
+          const count = ticketsData.filter(t => {
             const ticketData = new Date(t.data_apertura).toISOString().split('T')[0]
             return ticketData === dataStr
           }).length || 0

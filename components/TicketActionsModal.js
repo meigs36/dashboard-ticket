@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { X, User, MessageSquare, History, Send, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { X, User, MessageSquare, History, Send, CheckCircle, Clock, AlertTriangle, Briefcase } from 'lucide-react'
+import InterventiTab from './InterventiTab'
 
 export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   const { userProfile } = useAuth()
@@ -12,6 +13,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   
   // Stati per azioni
   const [nuovoStato, setNuovoStato] = useState(ticket.stato)
+  const [nuovaPriorita, setNuovaPriorita] = useState(ticket.priorita)
   const [tecnicoAssegnato, setTecnicoAssegnato] = useState(ticket.id_tecnico_assegnato || '')
   const [tecnici, setTecnici] = useState([])
   
@@ -120,6 +122,36 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
     }
   }
 
+  async function handleCambiaPriorita() {
+    if (nuovaPriorita === ticket.priorita) return
+
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('ticket')
+        .update({ priorita: nuovaPriorita })
+        .eq('id', ticket.id)
+
+      if (error) throw error
+
+      // Aggiungi nota automatica
+      await supabase.rpc('add_ticket_note', {
+        p_id_ticket: ticket.id,
+        p_tipo: 'cambio_priorita',
+        p_contenuto: `Priorità cambiata da "${ticket.priorita}" a "${nuovaPriorita}"`
+      })
+
+      alert('✅ Priorità aggiornata!')
+      onUpdate()
+      onClose()
+    } catch (error) {
+      console.error('Errore cambio priorità:', error)
+      alert('❌ Errore: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleAssegnaTecnico() {
     if (tecnicoAssegnato === ticket.id_tecnico_assegnato) return
 
@@ -171,9 +203,9 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
 
       if (error) throw error
 
+      alert('✅ Nota aggiunta!')
       setNuovaNota('')
       loadNote()
-      alert('✅ Nota aggiunta!')
     } catch (error) {
       console.error('Errore aggiunta nota:', error)
       alert('❌ Errore: ' + error.message)
@@ -182,62 +214,121 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
     }
   }
 
-  const getAzioneLabel = (azione) => {
+  function getStatoColor(stato) {
+    const colors = {
+      'aperto': 'text-blue-600',
+      'assegnato': 'text-purple-600',
+      'in_lavorazione': 'text-orange-600',
+      'in_attesa': 'text-yellow-600',
+      'risolto': 'text-green-600',
+      'chiuso': 'text-gray-600'
+    }
+    return colors[stato] || 'text-gray-600'
+  }
+
+  function getPrioritaColor(priorita) {
+    const colors = {
+      'bassa': 'text-green-600',
+      'media': 'text-yellow-600',
+      'alta': 'text-orange-600',
+      'critica': 'text-red-600'
+    }
+    return colors[priorita] || 'text-gray-600'
+  }
+
+  function getAzioneLabel(azione) {
     const labels = {
-      'cambio_stato': '📝 Cambio Stato',
-      'cambio_priorita': '⚠️ Cambio Priorità',
-      'assegnazione': '👤 Assegnazione'
+      'creato': '🆕 Ticket Creato',
+      'stato_cambiato': '🔄 Stato Modificato',
+      'priorita_cambiata': '⚠️ Priorità Modificata',
+      'assegnato': '👤 Tecnico Assegnato',
+      'nota_aggiunta': '📝 Nota Aggiunta',
+      'chiuso': '✅ Ticket Chiuso'
     }
     return labels[azione] || azione
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Gestione Ticket
+              Ticket #{ticket.numero_ticket}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 font-mono">
-              {ticket.numero_ticket}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {ticket.oggetto}
             </p>
           </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
-            <X size={24} />
+            <X size={24} className="text-gray-500" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700">
-          {['azioni', 'note', 'storico'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 px-6 py-3 font-medium transition-colors ${
-                activeTab === tab
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-              }`}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+        {/* Tabs Navigation */}
+        <div className="flex gap-2 px-6 pt-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('azioni')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
+              activeTab === 'azioni'
+                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+            }`}
+          >
+            <CheckCircle size={18} />
+            Azioni
+          </button>
+
+          {/* ⭐ NUOVO TAB INTERVENTI */}
+          <button
+            onClick={() => setActiveTab('interventi')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
+              activeTab === 'interventi'
+                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+            }`}
+          >
+            <Briefcase size={18} />
+            Interventi
+          </button>
+
+          <button
+            onClick={() => setActiveTab('note')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
+              activeTab === 'note'
+                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+            }`}
+          >
+            <MessageSquare size={18} />
+            Note
+          </button>
+          <button
+            onClick={() => setActiveTab('storico')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
+              activeTab === 'storico'
+                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+            }`}
+          >
+            <History size={18} />
+            Storico
+          </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        {/* Tab Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
           {/* TAB AZIONI */}
           {activeTab === 'azioni' && (
             <div className="space-y-6">
               {/* Cambia Stato */}
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <CheckCircle className="text-blue-600" size={20} />
+                  <Clock className="text-blue-600" size={20} />
                   <h3 className="font-semibold text-gray-900 dark:text-white">Cambia Stato</h3>
                 </div>
                 <div className="flex items-center gap-4">
@@ -246,12 +337,12 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                     onChange={(e) => setNuovoStato(e.target.value)}
                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="aperto">Aperto</option>
-                    <option value="assegnato">Assegnato</option>
-                    <option value="in_lavorazione">In Lavorazione</option>
-                    <option value="in_attesa_cliente">In Attesa Cliente</option>
-                    <option value="risolto">Risolto</option>
-                    <option value="chiuso">Chiuso</option>
+                    <option value="aperto">🔵 Aperto</option>
+                    <option value="assegnato">🟣 Assegnato</option>
+                    <option value="in_lavorazione">🟠 In Lavorazione</option>
+                    <option value="in_attesa">🟡 In Attesa</option>
+                    <option value="risolto">🟢 Risolto</option>
+                    <option value="chiuso">⚫ Chiuso</option>
                   </select>
                   <button
                     onClick={handleCambiaStato}
@@ -261,6 +352,43 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                     {loading ? 'Salvataggio...' : 'Aggiorna'}
                   </button>
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Stato attuale: <span className={`font-semibold ${getStatoColor(ticket.stato)}`}>
+                    {ticket.stato?.toUpperCase()}
+                  </span>
+                </p>
+              </div>
+
+              {/* Cambia Priorità */}
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertTriangle className="text-orange-600" size={20} />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Cambia Priorità</h3>
+                </div>
+                <div className="flex items-center gap-4">
+                  <select
+                    value={nuovaPriorita}
+                    onChange={(e) => setNuovaPriorita(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="bassa">🟢 Bassa</option>
+                    <option value="media">🟡 Media</option>
+                    <option value="alta">🔴 Alta</option>
+                    <option value="critica">🚨 Critica</option>
+                  </select>
+                  <button
+                    onClick={handleCambiaPriorita}
+                    disabled={loading || nuovaPriorita === ticket.priorita}
+                    className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Salvataggio...' : 'Aggiorna'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Priorità attuale: <span className={`font-semibold ${getPrioritaColor(ticket.priorita)}`}>
+                    {ticket.priorita?.toUpperCase()}
+                  </span>
+                </p>
               </div>
 
               {/* Assegna Tecnico */}
@@ -292,6 +420,14 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ⭐ TAB INTERVENTI (NUOVO) */}
+          {activeTab === 'interventi' && (
+            <InterventiTab 
+              ticket={ticket} 
+              onUpdate={onUpdate}
+            />
           )}
 
           {/* TAB NOTE */}

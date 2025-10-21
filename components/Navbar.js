@@ -5,10 +5,11 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
+import NotificationDropdown from '@/components/NotificationDropdown'
 import { 
   Menu, X, Home, Users, HardDrive, Ticket, Bell, 
   User, LogOut, Settings, Sun, Moon, ChevronDown,
-  BarChart3
+  BarChart3, FileText
 } from 'lucide-react'
 
 export default function Navbar() {
@@ -22,6 +23,7 @@ export default function Navbar() {
   const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Clienti', href: '/clienti', icon: Users },
+  { name: 'Contratti', href: '/contratti', icon: FileText },
   { name: 'Macchinari', href: '/macchinari', icon: HardDrive },
   { name: 'Ticket', href: '/ticket', icon: Ticket },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
@@ -103,13 +105,7 @@ const allNavigation = [...navigation, ...adminNavigation]
             </button>
 
             {/* Notifications */}
-            <button
-              className="relative p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            <NotificationDropdown />
 
             {/* Profile Dropdown - Desktop */}
             <div className="hidden md:block relative">
