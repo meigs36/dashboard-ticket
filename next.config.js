@@ -5,8 +5,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    unoptimized: true,
     domains: [],
   },
 }
-
-module.exports = nextConfig
