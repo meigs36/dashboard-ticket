@@ -1,5 +1,6 @@
 import { AuthProvider } from '@/contexts/AuthContext'
 import LayoutClient from '@/components/LayoutClient'
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import './globals.css'
 
 export const metadata = {
