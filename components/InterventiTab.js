@@ -3,16 +3,22 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift } from 'lucide-react'
+import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift, Edit2 } from 'lucide-react'
 import AggiungiInterventoModal from './AggiungiInterventoModal'
+import ModificaInterventoModal from './ModificaInterventoModal'
 
 export default function InterventiTab({ ticket, onUpdate }) {
   const [interventi, setInterventi] = useState([])
   const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [interventoSelezionato, setInterventoSelezionato] = useState(null)
   const [totali, setTotali] = useState({
     oreEffettive: 0,
     oreAddebitate: 0,
+    oreScalate: 0,
+    oreDaFatturare: 0,
+    oreFatturate: 0,
     oreCortesia: 0
   })
 
@@ -60,7 +66,32 @@ export default function InterventiTab({ ticket, onUpdate }) {
       // Calcola totali
       if (data && data.length > 0) {
         const totaleEffettive = data.reduce((sum, i) => sum + parseFloat(i.durata_effettiva || 0), 0)
-        const totaleAddebitate = data.reduce((sum, i) => sum + parseFloat(i.ore_scalate || i.durata_addebitata || 0), 0)
+        const totaleAddebitate = data.reduce((sum, i) => sum + parseFloat(i.durata_addebitata || 0), 0)
+        
+        // Ore scalate: solo interventi che hanno scalato dal contratto
+        const totaleScalate = data.reduce((sum, i) => sum + parseFloat(i.ore_scalate || 0), 0)
+        
+        // 🆕 Ore da fatturare: ore NON coperte da contratto (addebitate - scalate), escluse cortesia
+        const totaleDaFatturare = data
+          .filter(i => !i.is_cortesia && !i.fatturato)
+          .reduce((sum, i) => {
+            const oreAddebitate = parseFloat(i.durata_addebitata || 0)
+            const oreScalate = parseFloat(i.ore_scalate || 0)
+            const oreDaFatturare = oreAddebitate - oreScalate
+            return sum + (oreDaFatturare > 0 ? oreDaFatturare : 0)
+          }, 0)
+        
+        // 🆕 Ore fatturate: ore già fatturate (stessa logica ma con fatturato=true)
+        const totaleFatturate = data
+          .filter(i => !i.is_cortesia && i.fatturato)
+          .reduce((sum, i) => {
+            const oreAddebitate = parseFloat(i.durata_addebitata || 0)
+            const oreScalate = parseFloat(i.ore_scalate || 0)
+            const oreFatturate = oreAddebitate - oreScalate
+            return sum + (oreFatturate > 0 ? oreFatturate : 0)
+          }, 0)
+        
+        // Ore cortesia
         const totaleCortesia = data
           .filter(i => i.is_cortesia)
           .reduce((sum, i) => sum + parseFloat(i.durata_addebitata || 0), 0)
@@ -68,12 +99,18 @@ export default function InterventiTab({ ticket, onUpdate }) {
         setTotali({
           oreEffettive: totaleEffettive,
           oreAddebitate: totaleAddebitate,
+          oreScalate: totaleScalate,
+          oreDaFatturare: totaleDaFatturare,
+          oreFatturate: totaleFatturate,
           oreCortesia: totaleCortesia
         })
         
         console.log('📊 Totali calcolati:', {
           oreEffettive: totaleEffettive,
           oreAddebitate: totaleAddebitate,
+          oreScalate: totaleScalate,
+          oreDaFatturare: totaleDaFatturare,
+          oreFatturate: totaleFatturate,
           oreCortesia: totaleCortesia
         })
       }
@@ -209,12 +246,16 @@ export default function InterventiTab({ ticket, onUpdate }) {
                             </span>
                           )}
                         </div>
-                      ) : (
+                      ) : intervento.contratto_id ? (
                         <div className="text-sm text-blue-600 dark:text-blue-400">
                           💼 {intervento.nome_contratto || 'N/A'} (#{intervento.num_contratto || 'N/A'}) 
                           <span className="ml-2 font-semibold">
                             {formatDurata(intervento.ore_scalate)} scalate
                           </span>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-orange-600 dark:text-orange-400 font-medium">
+                          📍 Assistenza in loco (da fatturare)
                         </div>
                       )}
 
@@ -226,14 +267,29 @@ export default function InterventiTab({ ticket, onUpdate }) {
                       )}
                     </div>
 
-                    {/* Pulsante Elimina */}
-                    <button
-                      onClick={() => handleEliminaIntervento(intervento.id)}
-                      className="ml-4 p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      title="Elimina intervento"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {/* Pulsanti Azioni */}
+                    <div className="ml-4 flex gap-2">
+                      {/* Pulsante Modifica */}
+                      <button
+                        onClick={() => {
+                          setInterventoSelezionato(intervento)
+                          setShowEditModal(true)
+                        }}
+                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="Modifica intervento"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      
+                      {/* Pulsante Elimina */}
+                      <button
+                        onClick={() => handleEliminaIntervento(intervento.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Elimina intervento"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -245,7 +301,8 @@ export default function InterventiTab({ ticket, onUpdate }) {
             <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
               📊 Riepilogo Ticket
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {/* Ore lavorate */}
               <div>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                   Ore lavorate
@@ -254,6 +311,8 @@ export default function InterventiTab({ ticket, onUpdate }) {
                   {totali.oreEffettive.toFixed(1)}h
                 </p>
               </div>
+              
+              {/* Ore addebitate */}
               <div>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                   Ore addebitate
@@ -262,6 +321,47 @@ export default function InterventiTab({ ticket, onUpdate }) {
                   {totali.oreAddebitate.toFixed(1)}h
                 </p>
               </div>
+              
+              {/* Ore scalate da contratti */}
+              <div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Ore scalate
+                </p>
+                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                  {totali.oreScalate.toFixed(1)}h
+                </p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
+                  (da contratti)
+                </p>
+              </div>
+              
+              {/* Ore da fatturare */}
+              <div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Ore da fatturare
+                </p>
+                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                  {totali.oreDaFatturare.toFixed(1)}h
+                </p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
+                  (in loco)
+                </p>
+              </div>
+              
+              {/* Ore già fatturate */}
+              <div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Ore fatturate
+                </p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  {totali.oreFatturate.toFixed(1)}h
+                </p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
+                  (fatturate)
+                </p>
+              </div>
+              
+              {/* Ore cortesia */}
               <div>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                   Ore cortesia
@@ -282,6 +382,24 @@ export default function InterventiTab({ ticket, onUpdate }) {
           onClose={() => setShowModal(false)}
           onSuccess={() => {
             setShowModal(false)
+            loadInterventi()
+            onUpdate()
+          }}
+        />
+      )}
+
+      {/* Modal Modifica Intervento */}
+      {showEditModal && interventoSelezionato && (
+        <ModificaInterventoModal
+          intervento={interventoSelezionato}
+          ticket={ticket}
+          onClose={() => {
+            setShowEditModal(false)
+            setInterventoSelezionato(null)
+          }}
+          onSuccess={() => {
+            setShowEditModal(false)
+            setInterventoSelezionato(null)
             loadInterventi()
             onUpdate()
           }}

@@ -4,8 +4,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, Send, CheckCircle, AlertCircle, Search } from 'lucide-react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 export default function NuovoTicket() {
+  const searchParams = useSearchParams()
+  const clienteIdFromUrl = searchParams.get('cliente') // 🆕 Legge parametro ?cliente=ID
+  
   const [step, setStep] = useState(1) // 1: form, 2: success
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -31,10 +35,20 @@ export default function NuovoTicket() {
   
   const [ticketCreato, setTicketCreato] = useState(null)
 
-  // Carica clienti all'avvio
+  // 🆕 Carica clienti all'avvio
   useEffect(() => {
     loadClienti()
   }, [])
+
+  // 🆕 Precompila cliente se arriva da URL
+  useEffect(() => {
+    if (clienteIdFromUrl && clienti.length > 0 && !clienteSelezionato) {
+      const cliente = clienti.find(c => c.id === clienteIdFromUrl)
+      if (cliente) {
+        selectCliente(cliente)
+      }
+    }
+  }, [clienteIdFromUrl, clienti, clienteSelezionato])
 
   // Filtra clienti in base alla ricerca
   useEffect(() => {
@@ -223,55 +237,80 @@ export default function NuovoTicket() {
     )
   }
 
-  // Form Screen
+  // Main Form
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <Link 
+          <Link
             href="/"
-            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
+            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
           >
             <ArrowLeft size={20} />
             <span>Torna alla Dashboard</span>
           </Link>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Nuovo Ticket</h1>
-          <p className="text-gray-600">Compila il form per aprire una richiesta di assistenza</p>
+          
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Crea Nuovo Ticket
+          </h1>
+          <p className="text-gray-600">
+            Compila il modulo per aprire una nuova richiesta di assistenza
+          </p>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
-            <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+            <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
             <div>
               <h3 className="font-semibold text-red-900">Errore</h3>
-              <p className="text-sm text-red-700">{error}</p>
+              <p className="text-red-700">{error}</p>
             </div>
           </div>
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
           
+          {/* 🆕 Info se cliente precompilato */}
+          {clienteIdFromUrl && clienteSelezionato && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-900">
+                ℹ️ Cliente selezionato automaticamente: <strong>{clienteSelezionato.ragione_sociale}</strong>
+              </p>
+            </div>
+          )}
+
           {/* Selezione Cliente */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Cliente <span className="text-red-500">*</span>
             </label>
+            
             <div className="relative">
-              <input
-                type="text"
-                placeholder="Cerca per ragione sociale o codice..."
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={searchCliente}
-                onChange={(e) => setSearchCliente(e.target.value)}
-                required
-              />
-              <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Cerca cliente per nome o codice..."
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={searchCliente}
+                  onChange={(e) => setSearchCliente(e.target.value)}
+                  disabled={!!clienteIdFromUrl} // 🆕 Disabilita se arriva da URL
+                />
+              </div>
               
               {/* Dropdown risultati */}
-              {clientiFiltered.length > 0 && (
+              {clientiFiltered.length > 0 && !clienteIdFromUrl && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                   {clientiFiltered.map(cliente => (
                     <button

@@ -16,7 +16,7 @@ export default function ClientiPage() {
 
   async function loadClienti() {
     try {
-      // Carica clienti con i loro contratti
+      // Carica clienti con i loro contratti e macchinari
       const { data, error } = await supabase
         .from('clienti')
         .select(`
@@ -31,6 +31,10 @@ export default function ClientiPage() {
             ore_utilizzate,
             ore_rimanenti,
             data_scadenza
+          ),
+          macchinari:macchinari(
+            id,
+            stato
           )
         `)
         .order('ragione_sociale')
@@ -242,6 +246,23 @@ export default function ClientiPage() {
                           #{contrattoAttivo.num_contratto}
                         </div>
 
+                        {/* Macchinari */}
+                        {cliente.macchinari && cliente.macchinari.length > 0 && (
+                          <div className="flex items-center gap-2 text-xs text-gray-600 bg-blue-50 px-2 py-1 rounded">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                            </svg>
+                            <span className="font-medium">
+                              {cliente.macchinari.filter(m => m.stato === 'attivo').length} macchinari attivi
+                            </span>
+                            {cliente.macchinari.length > cliente.macchinari.filter(m => m.stato === 'attivo').length && (
+                              <span className="text-gray-500">
+                                ({cliente.macchinari.length} totali)
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {/* Ore Rimanenti */}
                         <div className="mt-3 pt-3 border-t border-gray-200">
                           <div className="flex items-center justify-between mb-1">
@@ -288,10 +309,36 @@ export default function ClientiPage() {
                       )}
                     </>
                   ) : (
-                    <div className="text-center py-4">
-                      <AlertCircle className="mx-auto text-gray-400 mb-2" size={24} />
-                      <p className="text-sm text-gray-500">Nessun contratto attivo</p>
-                    </div>
+                    <>
+                      {/* Nessun contratto ma mostra comunque i macchinari */}
+                      {cliente.macchinari && cliente.macchinari.length > 0 ? (
+                        <div className="space-y-3">
+                          <div className="text-center py-2">
+                            <AlertCircle className="mx-auto text-gray-400 mb-2" size={24} />
+                            <p className="text-sm text-gray-500">Nessun contratto attivo</p>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-gray-600 bg-blue-50 px-2 py-1.5 rounded">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                            </svg>
+                            <span className="font-medium">
+                              {cliente.macchinari.filter(m => m.stato === 'attivo').length} macchinari attivi
+                            </span>
+                            {cliente.macchinari.length > cliente.macchinari.filter(m => m.stato === 'attivo').length && (
+                              <span className="text-gray-500">
+                                ({cliente.macchinari.length} totali)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <AlertCircle className="mx-auto text-gray-400 mb-2" size={24} />
+                          <p className="text-sm text-gray-500">Nessun contratto attivo</p>
+                          <p className="text-xs text-gray-400 mt-1">Nessun macchinario registrato</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </Link>

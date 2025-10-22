@@ -19,14 +19,20 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
     descrizione_intervento: '',
     contratto_id: '',
     is_cortesia: false,
-    motivo_cortesia: ''
+    motivo_cortesia: '',
+    modalita_intervento: 'in_loco' // remoto, in_loco, in_garanzia
   })
 
   // Durata calcolata
   const [durataCalcolata, setDurataCalcolata] = useState(null)
+  
+  // Stato per la garanzia
+  const [garanziaValida, setGaranziaValida] = useState(false)
+  const [garanziaInfo, setGaranziaInfo] = useState(null)
 
   useEffect(() => {
     loadContratti()
+    checkGaranzia()
   }, [])
 
   useEffect(() => {
@@ -96,6 +102,67 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
     }
   }
 
+  async function checkGaranzia() {
+    try {
+      // Se il ticket ha un macchinario associato, verifica la garanzia
+      if (!ticket.id_macchinario) {
+        console.log('ℹ️ Ticket senza macchinario associato')
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('macchinari')
+        .select('garanzia_scadenza, garanzia_estensione_scadenza, numero_seriale, marca, modello')
+        .eq('id', ticket.id_macchinario)
+        .single()
+
+      if (error) throw error
+
+      if (data) {
+        const oggi = new Date()
+        oggi.setHours(0, 0, 0, 0)
+        
+        // Controlla prima garanzia estensione, poi garanzia base
+        let dataScadenza = null
+        let tipoGaranzia = null
+
+        if (data.garanzia_estensione_scadenza) {
+          const scadenzaEstensione = new Date(data.garanzia_estensione_scadenza)
+          scadenzaEstensione.setHours(0, 0, 0, 0)
+          
+          if (scadenzaEstensione >= oggi) {
+            dataScadenza = scadenzaEstensione
+            tipoGaranzia = 'Garanzia Estesa'
+          }
+        }
+        
+        if (!dataScadenza && data.garanzia_scadenza) {
+          const scadenzaBase = new Date(data.garanzia_scadenza)
+          scadenzaBase.setHours(0, 0, 0, 0)
+          
+          if (scadenzaBase >= oggi) {
+            dataScadenza = scadenzaBase
+            tipoGaranzia = 'Garanzia Base'
+          }
+        }
+
+        if (dataScadenza) {
+          setGaranziaValida(true)
+          setGaranziaInfo({
+            tipo: tipoGaranzia,
+            scadenza: dataScadenza,
+            macchinario: `${data.marca} ${data.modello} - ${data.numero_seriale}`
+          })
+          console.log('✅ Garanzia valida trovata:', tipoGaranzia, 'fino al', dataScadenza)
+        } else {
+          console.log('ℹ️ Nessuna garanzia valida per questo macchinario')
+        }
+      }
+    } catch (error) {
+      console.error('❌ Errore verifica garanzia:', error)
+    }
+  }
+
   function calcolaDurata() {
     const [oreInizio, minInizio] = formData.ora_inizio.split(':').map(Number)
     const [oreFine, minFine] = formData.ora_fine.split(':').map(Number)
@@ -148,8 +215,8 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
       return
     }
 
-    if (!formData.is_cortesia && !formData.contratto_id) {
-      alert('⚠️ Seleziona un contratto o imposta come cortesia')
+    if (!formData.is_cortesia && !formData.contratto_id && formData.modalita_intervento !== 'in_garanzia') {
+      alert('⚠️ Seleziona un contratto o imposta come cortesia/garanzia')
       return
     }
 
@@ -163,12 +230,17 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
       return
     }
 
+    if (!formData.modalita_intervento) {
+      alert('⚠️ Seleziona la modalità di intervento')
+      return
+    }
+
     setLoading(true)
 
     try {
       const interventoData = {
         ticket_id: ticket.id,
-        contratto_id: formData.is_cortesia ? null : formData.contratto_id,
+        contratto_id: (formData.is_cortesia || formData.modalita_intervento === 'in_garanzia') ? null : formData.contratto_id,
         data_intervento: formData.data_intervento,
         ora_inizio: formData.ora_inizio,
         ora_fine: formData.ora_fine,
@@ -177,7 +249,8 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
         tecnico_id: userProfile.id,  // Usa direttamente l'ID utente
         inserito_da: userProfile.id,
         tipo_attivita: formData.tipo_attivita,
-        descrizione_intervento: formData.descrizione_intervento || null
+        descrizione_intervento: formData.descrizione_intervento || null,
+        modalita_intervento: formData.modalita_intervento
       }
 
       console.log('📤 Invio intervento:', interventoData)
@@ -292,6 +365,104 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
               </div>
             </div>
           )}
+
+          {/* Modalità Intervento */}
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              🎯 Modalità Intervento *
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Remoto */}
+              <label className={`relative flex items-center p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                formData.modalita_intervento === 'remoto'
+                  ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/30'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-purple-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="modalita_intervento"
+                  value="remoto"
+                  checked={formData.modalita_intervento === 'remoto'}
+                  onChange={(e) => handleChange('modalita_intervento', e.target.value)}
+                  className="sr-only"
+                />
+                <div className="flex flex-col flex-1">
+                  <span className="font-semibold text-gray-900 dark:text-white">💻 Remoto</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Assistenza da remoto</span>
+                </div>
+                {formData.modalita_intervento === 'remoto' && (
+                  <span className="text-purple-600">✓</span>
+                )}
+              </label>
+
+              {/* In Loco */}
+              <label className={`relative flex items-center p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                formData.modalita_intervento === 'in_loco'
+                  ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/30'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-blue-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="modalita_intervento"
+                  value="in_loco"
+                  checked={formData.modalita_intervento === 'in_loco'}
+                  onChange={(e) => handleChange('modalita_intervento', e.target.value)}
+                  className="sr-only"
+                />
+                <div className="flex flex-col flex-1">
+                  <span className="font-semibold text-gray-900 dark:text-white">🏢 In Loco</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Presso il cliente</span>
+                </div>
+                {formData.modalita_intervento === 'in_loco' && (
+                  <span className="text-blue-600">✓</span>
+                )}
+              </label>
+
+              {/* In Garanzia */}
+              <label className={`relative flex items-center p-3 rounded-lg border-2 transition-all ${
+                !garanziaValida 
+                  ? 'opacity-50 cursor-not-allowed border-gray-200 dark:border-gray-700'
+                  : formData.modalita_intervento === 'in_garanzia'
+                  ? 'border-green-500 bg-green-100 dark:bg-green-900/30 cursor-pointer'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-green-300 cursor-pointer'
+              }`}>
+                <input
+                  type="radio"
+                  name="modalita_intervento"
+                  value="in_garanzia"
+                  checked={formData.modalita_intervento === 'in_garanzia'}
+                  onChange={(e) => handleChange('modalita_intervento', e.target.value)}
+                  disabled={!garanziaValida}
+                  className="sr-only"
+                />
+                <div className="flex flex-col flex-1">
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    🛡️ In Garanzia
+                    {!garanziaValida && <span className="text-xs font-normal ml-1">(Non disponibile)</span>}
+                  </span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {garanziaValida ? 'Coperto da garanzia' : 'Garanzia scaduta'}
+                  </span>
+                </div>
+                {formData.modalita_intervento === 'in_garanzia' && (
+                  <span className="text-green-600">✓</span>
+                )}
+              </label>
+            </div>
+
+            {/* Info Garanzia */}
+            {garanziaValida && garanziaInfo && (
+              <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <p className="text-sm text-green-800 dark:text-green-300 font-medium">
+                  ✅ {garanziaInfo.tipo} valida fino al {garanziaInfo.scadenza.toLocaleDateString('it-IT')}
+                </p>
+                <p className="text-xs text-green-700 dark:text-green-400 mt-1">
+                  {garanziaInfo.macchinario}
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Tipo Billing: Contratto o Cortesia */}
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-4">

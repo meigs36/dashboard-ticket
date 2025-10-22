@@ -2,22 +2,29 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import TicketActionsModal from '@/components/TicketActionsModal'
+import ContrattoModal from '@/components/ContrattoModal'
 
 export default function ClienteDettaglio() {
   const params = useParams()
   const [cliente, setCliente] = useState(null)
   const [macchinari, setMacchinari] = useState([])
+  const [contratti, setContratti] = useState([])
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('macchinari') // macchinari | ticket
+  const [activeTab, setActiveTab] = useState('macchinari') // macchinari | ticket | contratti
   
   // Stati per modal ticket
   const [ticketSelezionato, setTicketSelezionato] = useState(null)
   const [mostraModalAzioni, setMostraModalAzioni] = useState(false)
+  
+  // Stati per modal contratto
+  const [mostraModalContratto, setMostraModalContratto] = useState(false)
+  const [contrattoSelezionato, setContrattoSelezionato] = useState(null)
+  const [modalMode, setModalMode] = useState('view') // view | edit
 
   useEffect(() => {
     if (params.id) {
@@ -28,7 +35,7 @@ export default function ClienteDettaglio() {
   async function loadCliente() {
     try {
       // Carica cliente
-      const { data: clienteData, error: clienteError } = await supabase
+      const { data: clienteData, error: clienteError} = await supabase
         .from('clienti')
         .select('*')
         .eq('id', params.id)
@@ -46,6 +53,23 @@ export default function ClienteDettaglio() {
 
       if (macchinariError) throw macchinariError
       setMacchinari(macchinariData || [])
+
+      // Carica contratti usando codice_cliente
+const { data: contrattiData, error: contrattiError } = await supabase
+  .from('contratti')
+  .select('*')
+  .eq('codice_cliente', clienteData.codice_cliente)  // ✅ CORRETTO
+  .order('data_contratto', { ascending: false })  // ✅ CORRETTO
+
+if (contrattiError) {
+  console.error('❌ Errore caricamento contratti:', contrattiError)
+} else {
+  console.log('✅ Contratti caricati:', contrattiData?.length || 0, contrattiData)
+  setContratti(contrattiData || [])
+}
+
+      if (contrattiError) throw contrattiError
+      setContratti(contrattiData || [])
 
       // Carica ticket con tutte le relazioni necessarie
       const { data: ticketsData, error: ticketsError } = await supabase
@@ -94,6 +118,58 @@ export default function ClienteDettaglio() {
 
   function handleTicketUpdate() {
     loadCliente()
+  }
+
+  function handleContrattoClick(contratto) {
+    setContrattoSelezionato(contratto)
+    setModalMode('view')
+    setMostraModalContratto(true)
+  }
+
+  function handleEditContratto(contratto) {
+    setContrattoSelezionato(contratto)
+    setModalMode('edit')
+    setMostraModalContratto(true)
+  }
+
+  async function handleDeleteContratto(contratto) {
+    if (!confirm(`Sei sicuro di voler eliminare il contratto "${contratto.nome_contratto}"?\n\nQuesta operazione non può essere annullata.`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('contratti')
+        .delete()
+        .eq('id', contratto.id)
+
+      if (error) throw error
+
+      alert('✅ Contratto eliminato con successo')
+      loadCliente()
+    } catch (error) {
+      console.error('Errore eliminazione contratto:', error)
+      alert('❌ Errore durante l\'eliminazione del contratto: ' + error.message)
+    }
+  }
+
+  function closeModalContratto() {
+    setMostraModalContratto(false)
+    setContrattoSelezionato(null)
+    setModalMode('view')
+  }
+
+  function getStatoContrattoColor(stato) {
+    switch (stato) {
+      case 'attivo':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      case 'scaduto':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+      case 'sospeso':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+    }
   }
 
   const getStatoBadge = (stato) => {
@@ -286,7 +362,7 @@ export default function ClienteDettaglio() {
           </div>
         </div>
 
-        {/* Tabs: Macchinari e Ticket */}
+        {/* Tabs: Macchinari, Ticket e Contratti */}
         <div className="mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-t-xl shadow-sm border border-gray-200 dark:border-gray-700 border-b-0">
             <div className="flex border-b border-gray-200 dark:border-gray-700">
@@ -301,6 +377,19 @@ export default function ClienteDettaglio() {
                 <div className="flex items-center justify-center gap-2">
                   <HardDrive size={18} />
                   <span>Macchinari ({macchinari.length})</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('contratti')}
+                className={`flex-1 px-6 py-4 font-medium transition-colors ${
+                  activeTab === 'contratti'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <FileText size={18} />
+                  <span>Contratti ({contratti.length})</span>
                 </div>
               </button>
               <button
@@ -398,12 +487,193 @@ export default function ClienteDettaglio() {
               </>
             )}
 
+            {/* Tab Contratti */}
+            {activeTab === 'contratti' && (
+              <>
+                {contratti.length > 0 ? (
+                  <div className="space-y-4">
+                    {contratti.map((contratto) => {
+                      const percentualeUtilizzo = contratto.ore_incluse > 0 
+                        ? (contratto.ore_utilizzate / contratto.ore_incluse) * 100 
+                        : 0
+                      const oreRimanenti = contratto.ore_rimanenti || 0
+                      const isInScadenza = contratto.data_scadenza && 
+                        new Date(contratto.data_scadenza) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+
+                      return (
+                        <div 
+                          key={contratto.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        >
+                          {/* Header Contratto */}
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                                  {contratto.nome_contratto}
+                                </h3>
+                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatoContrattoColor(contratto.stato)}`}>
+                                  {contratto.stato.toUpperCase()}
+                                </span>
+                                {isInScadenza && contratto.stato === 'attivo' && (
+                                  <span className="px-2 py-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 rounded-full text-xs font-semibold">
+                                    ⚠️ IN SCADENZA
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                #{contratto.num_contratto} • {contratto.tipo_contratto}
+                              </p>
+                            </div>
+
+                            {/* Azioni */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleContrattoClick(contratto)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                title="Visualizza dettagli"
+                              >
+                                <FileText size={18} />
+                              </button>
+                              <button
+                                onClick={() => handleEditContratto(contratto)}
+                                className="p-2 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                                title="Modifica contratto"
+                              >
+                                <Edit2 size={18} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteContratto(contratto)}
+                                className="p-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                title="Elimina contratto"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Grid Info */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                            <div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Data Inizio</span>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {contratto.data_contratto 
+                                  ? new Date(contratto.data_contratto).toLocaleDateString('it-IT')
+                                  : 'N/D'}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Data Scadenza</span>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {contratto.data_scadenza 
+                                  ? new Date(contratto.data_scadenza).toLocaleDateString('it-IT')
+                                  : 'N/D'}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Sede</span>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {contratto.sede_riferimento || 'N/D'}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Tipo Contratto</span>
+                              <p className="font-medium text-gray-900 dark:text-white capitalize">
+                                {contratto.tipo_contratto || 'N/D'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Progress Bar Ore */}
+                          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Ore Disponibili
+                              </span>
+                              <span className={`text-sm font-bold ${
+                                percentualeUtilizzo >= 90 
+                                  ? 'text-red-600 dark:text-red-400' 
+                                  : percentualeUtilizzo >= 75 
+                                  ? 'text-orange-600 dark:text-orange-400' 
+                                  : 'text-green-600 dark:text-green-400'
+                              }`}>
+                                {oreRimanenti.toFixed(1)}h / {parseFloat(contratto.ore_incluse || 0).toFixed(1)}h
+                              </span>
+                            </div>
+                            
+                            {/* Progress Bar */}
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-2">
+                              <div
+                                className={`h-3 rounded-full transition-all ${
+                                  percentualeUtilizzo >= 90
+                                    ? 'bg-red-500'
+                                    : percentualeUtilizzo >= 75
+                                    ? 'bg-orange-500'
+                                    : 'bg-green-500'
+                                }`}
+                                style={{ width: `${Math.max(0, Math.min(100, 100 - percentualeUtilizzo))}%` }}
+                              ></div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                              <span>{parseFloat(contratto.ore_utilizzate || 0).toFixed(1)}h utilizzate</span>
+                              <span>{percentualeUtilizzo.toFixed(0)}% consumato</span>
+                            </div>
+                          </div>
+
+                          {/* Note Contratto */}
+                          {contratto.note && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                <span className="font-medium">Note:</span> {contratto.note}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <FileText className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                      Nessun contratto
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      Questo cliente non ha ancora contratti registrati
+                    </p>
+                    <button
+                      className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      <Plus size={18} />
+                      Crea Contratto
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Tab Ticket */}
             {activeTab === 'ticket' && (
               <>
                 {tickets.length > 0 ? (
-                  <div className="space-y-4">
-                    {tickets.map((ticket) => (
+                  <>
+                    {/* Header con pulsante Nuovo Ticket */}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Tutti i Ticket ({tickets.length})
+                      </h3>
+                      <Link
+                        href={`/ticket/nuovo?cliente=${cliente.id}`}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                      >
+                        <Plus size={16} />
+                        Nuovo Ticket
+                      </Link>
+                    </div>
+
+                    <div className="space-y-4">
+                      {tickets.map((ticket) => (
                       <div 
                         key={ticket.id}
                         onClick={() => handleTicketClick(ticket, null)}
@@ -469,6 +739,7 @@ export default function ClienteDettaglio() {
                       </div>
                     ))}
                   </div>
+                  </>
                 ) : (
                   <div className="text-center py-12">
                     <Ticket className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
@@ -498,6 +769,16 @@ export default function ClienteDettaglio() {
           ticket={ticketSelezionato}
           onClose={handleModalClose}
           onUpdate={handleTicketUpdate}
+        />
+      )}
+
+      {/* Modal Contratto */}
+      {mostraModalContratto && contrattoSelezionato && (
+        <ContrattoModal
+          contratto={contrattoSelezionato}
+          mode={modalMode}
+          onClose={closeModalContratto}
+          onUpdate={loadCliente}
         />
       )}
     </div>
