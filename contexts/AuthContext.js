@@ -105,9 +105,26 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // ✅ NUOVA FUNZIONE: Ricarica profilo senza reload pagina
+  async function refreshProfile() {
+    if (!user?.id) {
+      console.warn('⚠️ Impossibile ricaricare profilo: utente non loggato')
+      return
+    }
+    
+    console.log('🔄 Ricaricamento profilo in corso...')
+    try {
+      await loadUserProfile(user.id)
+      console.log('✅ Profilo ricaricato con successo')
+    } catch (error) {
+      console.error('❌ Errore ricaricamento profilo:', error)
+      throw error
+    }
+  }
+
   async function signIn(email, password) {
     try {
-      console.log('🔐 Tentativo login:', email)
+      console.log('🔑 Tentativo login:', email)
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -228,6 +245,7 @@ export function AuthProvider({ children }) {
     signOut,
     resetPassword,
     updatePassword,
+    refreshProfile, // ✅ AGGIUNTA: Esporta la nuova funzione
     isAdmin,
     isTecnico
   }

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { 
   User, Mail, Phone, Briefcase, Calendar, Shield, 
   Key, Save, Eye, EyeOff, CheckCircle, Award,
-  Clock, Ticket, FileText, TrendingUp
+  Clock, Ticket, FileText, TrendingUp, ArrowLeft
 } from 'lucide-react'
 
 export default function ProfiloPage() {
@@ -55,43 +55,69 @@ export default function ProfiloPage() {
   }, [userProfile])
 
   async function loadStats() {
+    if (!userProfile?.id) return
+    
     try {
+      // ✅ CORRETTO: id_tecnico_assegnato (non tecnico_assegnato_id)
       // Ticket risolti
-      const { count: ticketRisolti } = await supabase
+      const { count: ticketRisolti, error: risError } = await supabase
         .from('ticket')
         .select('*', { count: 'exact', head: true })
-        .eq('tecnico_assegnato_id', userProfile.id)
+        .eq('id_tecnico_assegnato', userProfile.id)
         .eq('stato', 'risolto')
 
+      if (risError) {
+        console.error('Errore caricamento ticket risolti:', risError)
+      }
+
       // Ticket aperti
-      const { count: ticketAperti } = await supabase
+      const { count: ticketAperti, error: apertiError } = await supabase
         .from('ticket')
         .select('*', { count: 'exact', head: true })
-        .eq('tecnico_assegnato_id', userProfile.id)
+        .eq('id_tecnico_assegnato', userProfile.id)
         .in('stato', ['aperto', 'in_lavorazione'])
 
+      if (apertiError) {
+        console.error('Errore caricamento ticket aperti:', apertiError)
+      }
+
       // Interventi effettuati
-      const { count: interventiEffettuati } = await supabase
+      const { count: interventiEffettuati, error: intError } = await supabase
         .from('interventi')
         .select('*', { count: 'exact', head: true })
         .eq('tecnico_id', userProfile.id)
 
+      if (intError) {
+        console.error('Errore caricamento interventi:', intError)
+      }
+
       // Ore totali lavorate
-      const { data: interventi } = await supabase
+      const { data: interventi, error: oreError } = await supabase
         .from('interventi')
         .select('durata_effettiva')
         .eq('tecnico_id', userProfile.id)
+
+      if (oreError) {
+        console.error('Errore caricamento ore:', oreError)
+      }
 
       const oreTotali = interventi?.reduce((sum, i) => sum + parseFloat(i.durata_effettiva || 0), 0) || 0
 
       setStats({
         ticketRisolti: ticketRisolti || 0,
         interventiEffettuati: interventiEffettuati || 0,
-        oreTotali: oreTotali,
+        oreTotali: Math.round(oreTotali * 10) / 10, // Arrotonda a 1 decimale
         ticketAperti: ticketAperti || 0
       })
     } catch (error) {
       console.error('Errore caricamento statistiche:', error)
+      // Non bloccare l'app se le stats falliscono
+      setStats({
+        ticketRisolti: 0,
+        interventiEffettuati: 0,
+        oreTotali: 0,
+        ticketAperti: 0
+      })
     }
   }
 
@@ -126,6 +152,7 @@ export default function ProfiloPage() {
       }
 
       await refreshProfile()
+      await loadStats() // ✅ Ricarica anche le statistiche
     } catch (error) {
       console.error('Errore aggiornamento profilo:', error)
       alert('❌ Errore: ' + error.message)
@@ -196,6 +223,15 @@ export default function ProfiloPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-5xl mx-auto">
+        {/* Pulsante Indietro per PWA */}
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+        >
+          <ArrowLeft size={20} />
+          Indietro
+        </button>
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Il Mio Profilo</h1>
@@ -215,76 +251,99 @@ export default function ProfiloPage() {
               <h2 className="text-2xl font-bold text-gray-900 mb-1">
                 {userProfile.nome} {userProfile.cognome}
               </h2>
-              <p className="text-gray-600 mb-2">{userProfile.email}</p>
+              <p className="text-gray-600 mb-3">{userProfile.email}</p>
               <div className="flex items-center gap-2">
                 <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getRuoloBadgeColor(userProfile.ruolo)}`}>
                   {userProfile.ruolo === 'admin' ? '👑 Amministratore' : '🔧 Tecnico'}
                 </span>
                 {userProfile.attivo && (
-                  <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium border border-green-200">
-                    ✅ Attivo
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-200">
+                    <CheckCircle className="inline-block mr-1" size={14} />
+                    Attivo
                   </span>
                 )}
+              </div>
+            </div>
+
+            {/* Stats Quick View */}
+            <div className="hidden lg:flex gap-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.ticketAperti}</div>
+                <div className="text-xs text-gray-500">Aperti</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.ticketRisolti}</div>
+                <div className="text-xs text-gray-500">Risolti</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">{stats.oreTotali}h</div>
+                <div className="text-xs text-gray-500">Ore Lavorate</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Stats Cards - Solo per tecnici */}
-        {userProfile.ruolo === 'tecnico' && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-green-50 rounded-lg">
-                  <CheckCircle className="text-green-600" size={20} />
-                </div>
-                <span className="text-sm text-gray-600">Ticket Risolti</span>
+        {/* Stats Cards (Mobile) */}
+        <div className="grid grid-cols-2 lg:hidden gap-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Ticket className="text-blue-600" size={20} />
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.ticketRisolti}</p>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-blue-50 rounded-lg">
-                  <Ticket className="text-blue-600" size={20} />
-                </div>
-                <span className="text-sm text-gray-600">Ticket Aperti</span>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{stats.ticketAperti}</div>
+                <div className="text-xs text-gray-500">Ticket Aperti</div>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.ticketAperti}</p>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-purple-50 rounded-lg">
-                  <FileText className="text-purple-600" size={20} />
-                </div>
-                <span className="text-sm text-gray-600">Interventi</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.interventiEffettuati}</p>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-orange-50 rounded-lg">
-                  <Clock className="text-orange-600" size={20} />
-                </div>
-                <span className="text-sm text-gray-600">Ore Lavorate</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.oreTotali.toFixed(1)}h</p>
             </div>
           </div>
-        )}
 
-        {/* Tabs */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="text-green-600" size={20} />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{stats.ticketRisolti}</div>
+                <div className="text-xs text-gray-500">Risolti</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <FileText className="text-purple-600" size={20} />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{stats.interventiEffettuati}</div>
+                <div className="text-xs text-gray-500">Interventi</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                <Clock className="text-orange-600" size={20} />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{stats.oreTotali}h</div>
+                <div className="text-xs text-gray-500">Ore Totali</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs Card */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Tab Headers */}
-          <div className="border-b border-gray-200 flex">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200">
             <button
               onClick={() => setActiveTab('dati')}
               className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
                 activeTab === 'dati'
-                  ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               <User className="inline-block mr-2" size={18} />
@@ -294,8 +353,8 @@ export default function ProfiloPage() {
               onClick={() => setActiveTab('password')}
               className={`flex-1 px-6 py-4 text-sm font-medium transition-colors ${
                 activeTab === 'password'
-                  ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               <Key className="inline-block mr-2" size={18} />
