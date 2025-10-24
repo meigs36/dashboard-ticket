@@ -102,50 +102,50 @@ export default function MacchinariPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <Link 
             href="/"
-            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
+            className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
           >
             <ArrowLeft size={20} />
             <span>Torna alla Dashboard</span>
           </Link>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Ricerca Macchinari</h1>
-          <p className="text-gray-600">Trova quali clienti hanno un determinato tipo di macchinario</p>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Ricerca Macchinari</h1>
+          <p className="text-gray-600 dark:text-gray-400">Trova quali clienti hanno un determinato tipo di macchinario</p>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Macchinari Totali</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totali}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Macchinari Totali</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totali}</p>
               </div>
-              <div className="bg-green-100 p-3 rounded-lg">
-                <HardDrive className="text-green-600" size={24} />
+              <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-lg">
+                <HardDrive className="text-green-600 dark:text-green-400" size={24} />
               </div>
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               {stats.attivi} attivi
             </p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Tipi Più Comuni</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Tipi Più Comuni</h3>
             <div className="space-y-2">
               {stats.tipi.slice(0, 5).map((tipo, idx) => (
                 <div key={idx} className="flex justify-between items-center text-sm">
                   <button
                     onClick={() => setSearchTerm(tipo.tipo)}
-                    className="text-blue-600 hover:text-blue-700 hover:underline text-left"
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline text-left"
                   >
                     {tipo.tipo}
                   </button>
-                  <span className="text-gray-500">({tipo.count})</span>
+                  <span className="text-gray-500 dark:text-gray-400">({tipo.count})</span>
                 </div>
               ))}
             </div>
@@ -153,19 +153,19 @@ export default function MacchinariPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
           <div className="relative">
             <input
               type="text"
               placeholder="Cerca per tipo, modello, marca o numero seriale..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
+            <Search className="absolute left-3 top-3.5 text-gray-400 dark:text-gray-500" size={20} />
           </div>
           {searchTerm.length > 0 && searchTerm.length < 2 && (
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
               Digita almeno 2 caratteri per cercare...
             </p>
           )}
@@ -175,12 +175,12 @@ export default function MacchinariPage() {
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Ricerca in corso...</p>
+            <p className="text-gray-600 dark:text-gray-400">Ricerca in corso...</p>
           </div>
         ) : risultati.length > 0 ? (
           <>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-4">
-              <p className="text-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-4">
+              <p className="text-gray-700 dark:text-gray-300">
                 Trovati <strong>{risultati.length}</strong> macchinari corrispondenti a &quot;{searchTerm}&quot;
               </p>
             </div>
@@ -189,49 +189,49 @@ export default function MacchinariPage() {
               {risultati.map((macchinario) => (
                 <div
                   key={macchinario.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-xl font-bold text-gray-900">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                           {macchinario.tipo_macchinario}
                         </h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                           macchinario.stato === 'attivo' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' 
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-400'
                         }`}>
                           {macchinario.stato.toUpperCase()}
                         </span>
                       </div>
                       
-                      <p className="text-gray-600 mb-3">
+                      <p className="text-gray-600 dark:text-gray-400 mb-3">
                         {macchinario.marca} - {macchinario.modello}
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-500">Matricola:</span>
-                          <p className="font-mono text-gray-900">{macchinario.numero_seriale}</p>
+                          <span className="text-gray-500 dark:text-gray-400">Matricola:</span>
+                          <p className="font-mono text-gray-900 dark:text-white">{macchinario.numero_seriale}</p>
                         </div>
                         {macchinario.data_installazione && (
                           <div className="flex items-center gap-2">
-                            <Calendar size={16} className="text-gray-400" />
+                            <Calendar size={16} className="text-gray-400 dark:text-gray-500" />
                             <div>
-                              <span className="text-gray-500">Installato:</span>
-                              <p className="text-gray-900">
+                              <span className="text-gray-500 dark:text-gray-400">Installato:</span>
+                              <p className="text-gray-900 dark:text-white">
                                 {new Date(macchinario.data_installazione).toLocaleDateString('it-IT')}
                               </p>
                             </div>
                           </div>
                         )}
                         <div>
-                          <span className="text-gray-500">Manutenzione:</span>
+                          <span className="text-gray-500 dark:text-gray-400">Manutenzione:</span>
                           <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
                             macchinario.contratto_manutenzione === 'attivo'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-400'
                           }`}>
                             {macchinario.contratto_manutenzione}
                           </span>
@@ -242,21 +242,21 @@ export default function MacchinariPage() {
 
                   {/* Info Cliente */}
                   {macchinario.clienti && (
-                    <div className="pt-4 border-t border-gray-100">
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
-                          <p className="text-sm text-gray-500 mb-1">Installato presso:</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Installato presso:</p>
                           <div className="flex items-start gap-4">
                             <div>
-                              <p className="font-semibold text-gray-900">
+                              <p className="font-semibold text-gray-900 dark:text-white">
                                 {macchinario.clienti.ragione_sociale}
                               </p>
-                              <p className="text-sm text-gray-600">
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
                                 Cod. {macchinario.clienti.codice_cliente}
                               </p>
                             </div>
                             {macchinario.clienti.citta && (
-                              <div className="flex items-center gap-1 text-sm text-gray-600">
+                              <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
                                 <MapPin size={14} />
                                 <span>{macchinario.clienti.citta} ({macchinario.clienti.provincia})</span>
                               </div>
@@ -265,7 +265,7 @@ export default function MacchinariPage() {
                         </div>
                         <Link
                           href={`/clienti/${macchinario.clienti.id}`}
-                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm font-medium"
                         >
                           <span>Vedi Cliente</span>
                           <ExternalLink size={16} />
@@ -278,25 +278,25 @@ export default function MacchinariPage() {
             </div>
           </>
         ) : searchTerm.length >= 2 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <Search className="mx-auto text-gray-400 mb-4" size={48} />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
+            <Search className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               Nessun macchinario trovato
             </h3>
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-400">
               Prova con altri termini di ricerca
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <HardDrive className="mx-auto text-gray-400 mb-4" size={48} />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
+            <HardDrive className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               Cerca un macchinario
             </h3>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
               Utilizza la barra di ricerca per trovare macchinari specifici
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-500">
               Puoi cercare per tipo, modello, marca o numero seriale
             </p>
           </div>
