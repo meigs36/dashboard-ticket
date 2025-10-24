@@ -416,7 +416,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
         </div>
 
         {/* Tabs Navigation */}
-        <div className="flex gap-2 px-6 pt-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+        <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 flex gap-2 px-6 pt-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
           <button
             onClick={() => setActiveTab('azioni')}
             className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
