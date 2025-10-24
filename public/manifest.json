@@ -1,86 +1,60 @@
 {
   "name": "Odonto Service - Sistema Ticket",
   "short_name": "Odonto Service",
-  "description": "Sistema completo per assistenza tecnica odontoiatrica. Installabile come app nativa su tutti i dispositivi. Funziona anche offline.",
+  "description": "Sistema completo per assistenza tecnica odontoiatrica",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1E90FF",
   "orientation": "portrait-primary",
-  "scope": "/",
-  "lang": "it-IT",
-  "dir": "ltr",
   "icons": [
     {
       "src": "/icons/icon-72x72.png",
       "sizes": "72x72",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-96x96.png",
       "sizes": "96x96",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-128x128.png",
       "sizes": "128x128",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-144x144.png",
       "sizes": "144x144",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-152x152.png",
       "sizes": "152x152",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-384x384.png",
       "sizes": "384x384",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
-  ],
-  "shortcuts": [
-    {
-      "name": "Nuovo Ticket",
-      "short_name": "Nuovo",
-      "description": "Crea un nuovo ticket di assistenza",
-      "url": "/tickets/new",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "I Miei Ticket",
-      "short_name": "Ticket",
-      "description": "Visualizza i tuoi ticket",
-      "url": "/tickets",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
-    }
-  ],
-  "categories": [
-    "business",
-    "productivity",
-    "utilities"
-  ],
-  "screenshots": [],
-  "prefer_related_applications": false
+  ]
 }
