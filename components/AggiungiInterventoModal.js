@@ -42,65 +42,68 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
   }, [formData.ora_inizio, formData.ora_fine])
 
   async function loadContratti() {
-    try {
-      // DEBUG: Mostra cosa c'è nell'oggetto ticket
-      console.log('🔍 DEBUG Ticket object:', ticket)
-      
-      // Il codice_cliente può essere diretto o dentro un oggetto cliente
-      let codiceCliente = ticket.codice_cliente || ticket.cliente?.codice_cliente
-      
-      // Se non abbiamo codice_cliente diretto, dobbiamo caricarlo dal cliente
-      if (!codiceCliente && (ticket.id_cliente || ticket.cliente_id)) {
-        console.log('🔍 Carico codice_cliente dal database...')
-        const clienteId = ticket.id_cliente || ticket.cliente_id
-        
-        const { data: clienteData, error: clienteError } = await supabase
-          .from('clienti')
-          .select('codice_cliente')
-          .eq('id', clienteId)
-          .single()
-        
-        if (clienteError) {
-          console.error('❌ Errore caricamento cliente:', clienteError)
-          throw new Error('Impossibile trovare il cliente del ticket')
-        }
-        
-        codiceCliente = clienteData?.codice_cliente
-        console.log('✅ Codice cliente trovato:', codiceCliente)
-      }
-      
-      if (!codiceCliente) {
-        console.error('❌ Nessun codice cliente trovato!')
-        alert('⚠️ Errore: impossibile identificare il cliente del ticket')
-        return
-      }
-      
-      console.log('🔍 Cerco contratti per codice_cliente:', codiceCliente)
-      
-      // Cerca contratti usando codice_cliente
-      const { data, error } = await supabase
-        .from('contratti')
-        .select('*')
-        .eq('codice_cliente', codiceCliente)
-        .eq('stato', 'attivo')
-        .order('data_scadenza', { ascending: false })
-
-      if (error) throw error
-      
-      console.log('✅ Contratti trovati:', data)
-      setContratti(data || [])
-      
-      // Seleziona automaticamente il primo contratto se presente
-      if (data && data.length > 0) {
-        setFormData(prev => ({ ...prev, contratto_id: data[0].id }))
-      } else {
-        console.warn('⚠️ Nessun contratto attivo trovato per codice_cliente:', codiceCliente)
-      }
-    } catch (error) {
-      console.error('❌ Errore caricamento contratti:', error)
-      alert('❌ Errore caricamento contratti: ' + error.message)
+  try {
+    console.log('🔍 DEBUG Ticket object:', ticket)
+    
+    // Ottieni ID cliente dal ticket
+    const clienteId = ticket.id_cliente || ticket.cliente_id
+    
+    if (!clienteId) {
+      console.warn('⚠️ Nessun cliente associato - intervento sarà da fatturare')
+      return
     }
+    
+    console.log('✅ Cliente ID:', clienteId)
+    
+    // 1. Carica il codice_cliente da clienti
+    const { data: clienteData, error: clienteError } = await supabase
+      .from('clienti')
+      .select('codice_cliente')
+      .eq('id', clienteId)
+      .single()
+    
+    if (clienteError) {
+      console.error('❌ Errore caricamento cliente:', clienteError)
+      return
+    }
+    
+    const codiceCliente = clienteData?.codice_cliente
+    
+    if (!codiceCliente) {
+      console.warn('⚠️ Cliente senza codice - intervento sarà da fatturare')
+      return
+    }
+    
+    console.log('🔍 Cerco contratti per codice_cliente:', codiceCliente)
+    
+    // 2. Cerca contratti usando codice_cliente
+    const { data, error } = await supabase
+      .from('contratti')
+      .select('*')
+      .eq('codice_cliente', codiceCliente)
+      .eq('stato', 'attivo')
+      .order('data_scadenza', { ascending: false })
+
+    if (error) {
+      console.error('❌ Errore query contratti:', error)
+      return
+    }
+    
+    console.log('✅ Contratti trovati:', data?.length || 0, data)
+    setContratti(data || [])
+    
+    // Seleziona automaticamente il primo contratto se presente
+    if (data && data.length > 0) {
+      setFormData(prev => ({ ...prev, contratto_id: data[0].id }))
+      console.log('✅ Contratto preselezionato:', data[0].num_contratto)
+    } else {
+      console.log('ℹ️ Nessun contratto attivo - intervento sarà da fatturare')
+    }
+  } catch (error) {
+    console.error('❌ Errore caricamento contratti:', error)
+    // Non bloccare il form - permetti inserimento senza contratto
   }
+}
 
   async function checkGaranzia() {
     try {
@@ -239,19 +242,21 @@ export default function AggiungiInterventoModal({ ticket, onClose, onSuccess }) 
 
     try {
       const interventoData = {
-        ticket_id: ticket.id,
-        contratto_id: (formData.is_cortesia || formData.modalita_intervento === 'in_garanzia') ? null : formData.contratto_id,
-        data_intervento: formData.data_intervento,
-        ora_inizio: formData.ora_inizio,
-        ora_fine: formData.ora_fine,
-        is_cortesia: formData.is_cortesia,
-        motivo_cortesia: formData.is_cortesia ? formData.motivo_cortesia : null,
-        tecnico_id: userProfile.id,  // Usa direttamente l'ID utente
-        inserito_da: userProfile.id,
-        tipo_attivita: formData.tipo_attivita,
-        descrizione_intervento: formData.descrizione_intervento || null,
-        modalita_intervento: formData.modalita_intervento
-      }
+  ticket_id: ticket.id,
+  contratto_id: (formData.is_cortesia || formData.modalita_intervento === 'in_garanzia') 
+    ? null 
+    : (formData.contratto_id || null),
+  data_intervento: formData.data_intervento,
+  ora_inizio: formData.ora_inizio,
+  ora_fine: formData.ora_fine,
+  is_cortesia: formData.is_cortesia,
+  motivo_cortesia: formData.is_cortesia ? formData.motivo_cortesia : null,
+  id_tecnico: userProfile.id,  // ← CAMBIATO QUI
+  inserito_da: userProfile.id,
+  tipo_attivita: formData.tipo_attivita,
+  descrizione_intervento: formData.descrizione_intervento || null,
+  modalita_intervento: formData.modalita_intervento
+}
 
       console.log('📤 Invio intervento:', interventoData)
 

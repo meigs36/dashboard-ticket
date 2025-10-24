@@ -25,6 +25,8 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   
   // Stati per storico
   const [storico, setStorico] = useState([])
+  const [notaInModifica, setNotaInModifica] = useState(null)
+  const [testoModifica, setTestoModifica] = useState('')
   const [loadingStorico, setLoadingStorico] = useState(false)
 
   useEffect(() => {
@@ -52,16 +54,61 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   async function loadNote() {
     setLoadingNote(true)
     try {
-      const { data, error } = await supabase
-        .from('ticket_note_complete')
+      console.log('🔍 Carico note per ticket:', ticket.id)
+      
+      // Carica note senza JOIN automatico
+      const { data: noteData, error: noteError } = await supabase
+        .from('ticket_note')
         .select('*')
         .eq('id_ticket', ticket.id)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
-      setNote(data || [])
+      if (noteError) {
+        console.error('❌ Errore Supabase note:', noteError)
+        throw noteError
+      }
+      
+      console.log('📝 Note trovate:', noteData?.length || 0)
+      
+      // Se non ci sono note, ritorna array vuoto
+      if (!noteData || noteData.length === 0) {
+        setNote([])
+        return
+      }
+      
+      // Per ogni nota, carica l'utente manualmente
+      const noteConUtenti = await Promise.all(
+        noteData.map(async (nota) => {
+          try {
+            const { data: utente } = await supabase
+              .from('utenti')
+              .select('nome, cognome, email')
+              .eq('id', nota.id_utente)
+              .maybeSingle() // Usa maybeSingle invece di single per evitare errori
+            
+            return {
+              ...nota,
+              utente,
+              utente_nome: utente ? `${utente.nome} ${utente.cognome}` : 'Utente Sconosciuto',
+              utente_email: utente?.email || null
+            }
+          } catch (err) {
+            console.error('Errore caricamento utente per nota:', nota.id, err)
+            return {
+              ...nota,
+              utente: null,
+              utente_nome: 'Utente Sconosciuto',
+              utente_email: null
+            }
+          }
+        })
+      )
+      
+      console.log('✅ Note caricate con utenti:', noteConUtenti.length)
+      setNote(noteConUtenti)
     } catch (error) {
       console.error('Errore caricamento note:', error)
+      setNote([])
     } finally {
       setLoadingNote(false)
     }
@@ -70,18 +117,117 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   async function loadStorico() {
     setLoadingStorico(true)
     try {
-      const { data, error } = await supabase
-        .from('ticket_storico_complete')
+      console.log('🔍 Carico storico per ticket:', ticket.id)
+      
+      // Carica storico senza JOIN automatico
+      const { data: storicoData, error: storicoError } = await supabase
+        .from('ticket_storico')
         .select('*')
         .eq('id_ticket', ticket.id)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
-      setStorico(data || [])
+      if (storicoError) {
+        console.error('❌ Errore Supabase storico:', storicoError)
+        throw storicoError
+      }
+      
+      console.log('📜 Storico trovato:', storicoData?.length || 0)
+      
+      // Se non c'è storico, ritorna array vuoto
+      if (!storicoData || storicoData.length === 0) {
+        setStorico([])
+        return
+      }
+      
+      // Per ogni item, carica l'utente manualmente
+      const storicoConUtenti = await Promise.all(
+        storicoData.map(async (item) => {
+          try {
+            const { data: utente } = await supabase
+              .from('utenti')
+              .select('nome, cognome, email')
+              .eq('id', item.id_utente)
+              .maybeSingle() // Usa maybeSingle invece di single
+            
+            return {
+              ...item,
+              utente,
+              utente_nome: utente ? `${utente.nome} ${utente.cognome}` : 'Utente Sconosciuto',
+              utente_email: utente?.email || null
+            }
+          } catch (err) {
+            console.error('Errore caricamento utente per storico:', item.id, err)
+            return {
+              ...item,
+              utente: null,
+              utente_nome: 'Utente Sconosciuto',
+              utente_email: null
+            }
+          }
+        })
+      )
+      
+      console.log('✅ Storico caricato con utenti:', storicoConUtenti.length)
+      setStorico(storicoConUtenti)
     } catch (error) {
       console.error('Errore caricamento storico:', error)
+      setStorico([])
     } finally {
       setLoadingStorico(false)
+    }
+  }
+
+  async function handleModificaNota(notaId, nuovoContenuto) {
+    if (!nuovoContenuto.trim()) {
+      alert('⚠️ Il contenuto della nota non può essere vuoto')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('ticket_note')
+        .update({ 
+          contenuto: nuovoContenuto,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', notaId)
+
+      if (error) throw error
+
+      alert('✅ Nota modificata con successo!')
+      setNotaInModifica(null)
+      setTestoModifica('')
+      loadNote()
+    } catch (error) {
+      console.error('❌ Errore modifica nota:', error)
+      alert('❌ Errore: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleEliminaNota(notaId) {
+    if (!confirm('⚠️ Sei sicuro di voler eliminare questa nota?\n\nQuesta azione non può essere annullata.')) {
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('ticket_note')
+        .delete()
+        .eq('id', notaId)
+
+      if (error) throw error
+
+      alert('✅ Nota eliminata con successo!')
+      loadNote()
+    } catch (error) {
+      console.error('❌ Errore eliminazione nota:', error)
+      alert('❌ Errore: ' + error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -477,28 +623,84 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                              {nota.utente_nome[0]}{nota.utente_cognome[0]}
+                              {nota.utente_nome?.split(" ").map(n => n[0]).join("").slice(0, 2) || "U"}
                             </div>
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white text-sm">
-                                {nota.utente_nome} {nota.utente_cognome}
+                                {nota.utente_nome}
                               </p>
                               <p className="text-xs text-gray-500">
                                 {new Date(nota.created_at).toLocaleString('it-IT')}
                               </p>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                            nota.tipo === 'nota_interna' 
-                              ? 'bg-gray-200 text-gray-700' 
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {nota.tipo === 'nota_interna' ? '📝 Interna' : '💬 Cliente'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              nota.tipo === 'nota_interna' 
+                                ? 'bg-gray-200 text-gray-700' 
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {nota.tipo === 'nota_interna' ? '📝 Interna' : '💬 Cliente'}
+                            </span>
+                            
+                            {/* 🆕 Pulsanti Modifica/Elimina */}
+                            {nota.id_utente === userProfile?.id && (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => {
+                                    setNotaInModifica(nota.id)
+                                    setTestoModifica(nota.contenuto)
+                                  }}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                  title="Modifica nota"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                </button>
+                                <button
+                                  onClick={() => handleEliminaNota(nota.id)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                  title="Elimina nota"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">
-                          {nota.contenuto}
-                        </p>
+                        
+                        {/* Contenuto nota o form modifica */}
+                        {notaInModifica === nota.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={testoModifica}
+                              onChange={(e) => setTestoModifica(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                              rows="3"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleModificaNota(nota.id, testoModifica)}
+                                disabled={loading}
+                                className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
+                              >
+                                💾 Salva
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setNotaInModifica(null)
+                                  setTestoModifica('')
+                                }}
+                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                              >
+                                ❌ Annulla
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">
+                            {nota.contenuto}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -535,7 +737,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                             </p>
                           </div>
                           <p className="text-xs text-gray-600 dark:text-gray-400">
-                            {entry.utente_nome} {entry.utente_cognome}
+                            {entry.utente_nome}
                           </p>
                         </div>
                         {entry.valore_precedente && entry.valore_nuovo && (

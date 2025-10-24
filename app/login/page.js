@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, AlertCircle, LogIn } from 'lucide-react'
@@ -11,8 +11,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { signIn } = useAuth()
+  const { signIn, user, userProfile } = useAuth()
   const router = useRouter()
+
+  // Redirect se già autenticato
+  useEffect(() => {
+    if (user && userProfile) {
+      console.log('✅ Utente già autenticato, redirect a dashboard')
+      router.push('/dashboard')
+    }
+  }, [user, userProfile, router])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -20,12 +28,24 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      await signIn(email, password)
-      router.push('/')
+      console.log('🔐 Invio form login...')
+      const { error: signInError } = await signIn(email, password)
+      
+      if (signInError) {
+        throw signInError
+      }
+      
+      console.log('✅ Login completato, attendo caricamento profilo...')
+      
+      // Aspetta un momento per far caricare il profilo
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      console.log('➡️ Redirect a dashboard')
+      router.push('/dashboard')
+      
     } catch (error) {
-      console.error('Errore login:', error)
-      setError('Credenziali non valide. Verifica email e password.')
-    } finally {
+      console.error('❌ Errore login:', error)
+      setError(error.message || 'Credenziali non valide. Verifica email e password.')
       setLoading(false)
     }
   }
@@ -59,20 +79,16 @@ export default function LoginPage() {
           {/* Errore */}
           {error && (
             <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
+              <AlertCircle className="text-red-600 dark:text-red-400" size={20} />
               <div>
-                <h3 className="font-semibold text-red-900 dark:text-red-200 text-sm">
-                  Errore di accesso
-                </h3>
-                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                  {error}
-                </p>
+                <h3 className="font-semibold text-red-900 dark:text-red-200">Errore di accesso</h3>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
               </div>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -80,15 +96,16 @@ export default function LoginPage() {
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="text-gray-400" size={20} />
+                  <Mail className="text-gray-400" size={18} />
                 </div>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white transition-colors"
-                  placeholder="tuo@email.com"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="tuo@email.it"
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -100,15 +117,16 @@ export default function LoginPage() {
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="text-gray-400" size={20} />
+                  <Lock className="text-gray-400" size={18} />
                 </div>
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white transition-colors"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   placeholder="••••••••"
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -117,7 +135,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>

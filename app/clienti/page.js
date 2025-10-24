@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { Search, ArrowLeft, Phone, Mail, MapPin, HardDrive, FileText, Clock } from 'lucide-react'
 import Link from 'next/link'
-import { Search, Phone, Mail, MapPin, FileText, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function ClientiPage() {
   const [clienti, setClienti] = useState([])
@@ -16,91 +16,63 @@ export default function ClientiPage() {
 
   async function loadClienti() {
     try {
-      // Carica clienti con i loro contratti e macchinari
-      const { data, error } = await supabase
+      // Carica clienti
+      const { data: clientiData, error: clientiError } = await supabase
         .from('clienti')
-        .select(`
-          *,
-          contratti:contratti(
-            id,
-            num_contratto,
-            nome_contratto,
-            tipo_contratto,
-            stato,
-            ore_incluse,
-            ore_utilizzate,
-            ore_rimanenti,
-            data_scadenza
-          ),
-          macchinari:macchinari(
-            id,
-            stato
-          )
-        `)
-        .order('ragione_sociale')
+        .select('*')
+        .order('ragione_sociale', { ascending: true })
 
-      if (error) throw error
+      if (clientiError) {
+        console.error('Errore Supabase clienti:', clientiError)
+        throw clientiError
+      }
+
+      // Per ogni cliente, carica macchinari e contratti
+      const clientiConDettagli = await Promise.all(
+        (clientiData || []).map(async (cliente) => {
+          // Conta macchinari
+          const { count: macchinariCount } = await supabase
+            .from('macchinari')
+            .select('*', { count: 'exact', head: true })
+            .eq('id_cliente', cliente.id)
+
+          // Carica contratti attivi - USA nome_contratto invece di tipo_contratto!
+          const { data: contratti } = await supabase
+            .from('contratti')
+            .select('id, num_contratto, tipo_contratto, nome_contratto, stato, ore_rimanenti')
+            .eq('codice_cliente', cliente.codice_cliente)
+            .eq('stato', 'attivo')
+
+          return {
+            ...cliente,
+            num_macchinari: macchinariCount || 0,
+            contratti: contratti || []
+          }
+        })
+      )
       
-      console.log('Clienti caricati:', data)
-      setClienti(data || [])
+      console.log('✅ Clienti caricati:', clientiConDettagli.length)
+      setClienti(clientiConDettagli)
     } catch (error) {
-      console.error('Errore caricamento clienti:', error)
-      alert('Errore nel caricamento dei clienti')
+      console.error('❌ Errore caricamento clienti:', error)
+      setClienti([])
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredClienti = clienti.filter((cliente) => {
-    const search = searchTerm.toLowerCase()
-    return (
-      cliente.ragione_sociale?.toLowerCase().includes(search) ||
-      cliente.codice_cliente?.toLowerCase().includes(search) ||
-      cliente.citta?.toLowerCase().includes(search) ||
-      cliente.email_riparazioni?.toLowerCase().includes(search)
-    )
-  })
-
-  function getContrattoAttivo(contratti) {
-    if (!contratti || contratti.length === 0) return null
-    return contratti.find(c => c.stato === 'attivo') || contratti[0]
-  }
-
-  function getStatoContrattoColor(stato) {
-    switch (stato) {
-      case 'attivo':
-        return 'bg-green-100 text-green-800'
-      case 'scaduto':
-        return 'bg-red-100 text-red-800'
-      case 'sospeso':
-        return 'bg-yellow-100 text-yellow-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  function isContrattoInScadenza(dataScadenza) {
-    if (!dataScadenza) return false
-    const oggi = new Date()
-    const scadenza = new Date(dataScadenza)
-    const diffGiorni = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24))
-    return diffGiorni > 0 && diffGiorni <= 30
-  }
-
-  function getOreWarningClass(oreRimanenti, oreIncluse) {
-    if (!oreRimanenti || !oreIncluse) return ''
-    const percentuale = (oreRimanenti / oreIncluse) * 100
-    if (percentuale <= 10) return 'text-red-600 font-bold'
-    if (percentuale <= 25) return 'text-orange-600 font-semibold'
-    return 'text-green-600'
-  }
+  const filteredClienti = clienti.filter(c =>
+    c.ragione_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.codice_cliente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.citta?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-blue-600 mb-4"></div>
-          <p className="text-gray-600">Caricamento clienti...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Caricamento clienti...</p>
         </div>
       </div>
     )
@@ -111,8 +83,15 @@ export default function ClientiPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Clienti</h1>
-          <p className="text-gray-600">Gestisci i tuoi clienti e i loro contratti</p>
+          <Link 
+            href="/"
+            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
+          >
+            <ArrowLeft size={20} />
+            <span>Torna alla Dashboard</span>
+          </Link>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Clienti</h1>
+          <p className="text-gray-600">{clienti.length} clienti totali</p>
         </div>
 
         {/* Search Bar */}
@@ -120,236 +99,160 @@ export default function ClientiPage() {
           <div className="relative">
             <input
               type="text"
-              placeholder="Cerca per ragione sociale, codice cliente, città..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Cerca per ragione sociale, codice cliente o città..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
-          </div>
-        </div>
-
-        {/* Statistiche Rapide */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <p className="text-sm text-gray-600 mb-1">Totale Clienti</p>
-            <p className="text-2xl font-bold text-gray-900">{clienti.length}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <p className="text-sm text-gray-600 mb-1">Clienti Attivi</p>
-            <p className="text-2xl font-bold text-green-600">
-              {clienti.filter(c => c.attivo).length}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <p className="text-sm text-gray-600 mb-1">Contratti Attivi</p>
-            <p className="text-2xl font-bold text-blue-600">
-              {clienti.reduce((sum, c) => sum + (c.contratti?.filter(ct => ct.stato === 'attivo').length || 0), 0)}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <p className="text-sm text-gray-600 mb-1">In Scadenza (30gg)</p>
-            <p className="text-2xl font-bold text-orange-600">
-              {clienti.reduce((sum, c) => {
-                const contratto = getContrattoAttivo(c.contratti)
-                return sum + (contratto && isContrattoInScadenza(contratto.data_scadenza) ? 1 : 0)
-              }, 0)}
-            </p>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           </div>
         </div>
 
         {/* Clienti Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredClienti.map((cliente) => {
-            const contrattoAttivo = getContrattoAttivo(cliente.contratti)
-            const hasContratto = contrattoAttivo !== null
-            const inScadenza = hasContratto && isContrattoInScadenza(contrattoAttivo.data_scadenza)
-
-            return (
+        {filteredClienti.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <Search className="mx-auto text-gray-400 mb-4" size={48} />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Nessun cliente trovato</h3>
+            <p className="text-gray-600">
+              {searchTerm ? 'Prova con un altro termine di ricerca' : 'Non ci sono clienti nel database'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredClienti.map((cliente) => (
               <Link
                 key={cliente.id}
                 href={`/clienti/${cliente.id}`}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                className="group bg-white rounded-xl shadow-sm border-2 border-gray-200 p-6 hover:shadow-xl hover:border-blue-400 transition-all duration-200"
               >
                 {/* Header Card */}
-                <div className="p-6 border-b border-gray-100">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-gray-900 mb-1">
-                        {cliente.ragione_sociale}
-                      </h3>
-                      <span className="text-sm text-gray-500">
-                        Cod. {cliente.codice_cliente}
-                      </span>
-                    </div>
-                    {cliente.attivo ? (
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
-                        Attivo
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full font-medium">
-                        Inattivo
-                      </span>
-                    )}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
+                      {cliente.ragione_sociale}
+                    </h3>
+                    <p className="text-sm font-medium text-gray-500">
+                      Cod. {cliente.codice_cliente}
+                    </p>
                   </div>
-
-                  {/* Contatti */}
-                  <div className="space-y-2">
-                    {cliente.telefono_principale && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Phone size={14} />
-                        <span>{cliente.telefono_principale}</span>
-                      </div>
-                    )}
-                    {cliente.email_riparazioni && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Mail size={14} />
-                        <span className="truncate">{cliente.email_riparazioni}</span>
-                      </div>
-                    )}
-                    {cliente.citta && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin size={14} />
-                        <span>{cliente.citta} {cliente.provincia ? `(${cliente.provincia})` : ''}</span>
-                      </div>
-                    )}
-                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                    cliente.attivo 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                  }`}>
+                    {cliente.attivo ? '● Attivo' : '○ Non attivo'}
+                  </span>
                 </div>
 
-                {/* Sezione Contratto */}
-                <div className="p-6 bg-gray-50">
-                  {hasContratto ? (
-                    <>
-                      {/* Alert Scadenza */}
-                      {inScadenza && (
-                        <div className="mb-3 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
-                          <AlertCircle size={14} />
-                          <span className="font-medium">Contratto in scadenza</span>
-                        </div>
+                {/* Info Contatti */}
+                <div className="space-y-2.5 mb-4">
+                  {cliente.citta && (
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <MapPin size={16} className="text-blue-500 flex-shrink-0" />
+                      <span className="font-medium">{cliente.citta}</span>
+                      {cliente.provincia && (
+                        <span className="text-gray-500">({cliente.provincia})</span>
                       )}
-
-                      {/* Info Contratto */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <FileText size={16} className="text-blue-600" />
-                            <span className="font-semibold text-gray-900">
-                              {contrattoAttivo.nome_contratto || 'Contratto'}
-                            </span>
-                          </div>
-                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${getStatoContrattoColor(contrattoAttivo.stato)}`}>
-                            {contrattoAttivo.stato}
-                          </span>
-                        </div>
-
-                        <div className="text-xs text-gray-600">
-                          #{contrattoAttivo.num_contratto}
-                        </div>
-
-                        {/* Macchinari */}
-                        {cliente.macchinari && cliente.macchinari.length > 0 && (
-                          <div className="flex items-center gap-2 text-xs text-gray-600 bg-blue-50 px-2 py-1 rounded">
-                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                            </svg>
-                            <span className="font-medium">
-                              {cliente.macchinari.filter(m => m.stato === 'attivo').length} macchinari attivi
-                            </span>
-                            {cliente.macchinari.length > cliente.macchinari.filter(m => m.stato === 'attivo').length && (
-                              <span className="text-gray-500">
-                                ({cliente.macchinari.length} totali)
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Ore Rimanenti */}
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-600">Ore disponibili</span>
-                            <span className={`text-sm font-bold ${getOreWarningClass(contrattoAttivo.ore_rimanenti, contrattoAttivo.ore_incluse)}`}>
-                              {parseFloat(contrattoAttivo.ore_rimanenti || 0).toFixed(1)}h / {parseFloat(contrattoAttivo.ore_incluse || 0).toFixed(1)}h
-                            </span>
-                          </div>
-                          
-                          {/* Progress Bar */}
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full transition-all ${
-                                (contrattoAttivo.ore_rimanenti / contrattoAttivo.ore_incluse) * 100 <= 10
-                                  ? 'bg-red-500'
-                                  : (contrattoAttivo.ore_rimanenti / contrattoAttivo.ore_incluse) * 100 <= 25
-                                  ? 'bg-orange-500'
-                                  : 'bg-green-500'
-                              }`}
-                              style={{
-                                width: `${Math.max(0, Math.min(100, (contrattoAttivo.ore_rimanenti / contrattoAttivo.ore_incluse) * 100))}%`
-                              }}
-                            ></div>
-                          </div>
-
-                          <div className="text-xs text-gray-500 mt-1">
-                            {parseFloat(contrattoAttivo.ore_utilizzate || 0).toFixed(1)}h utilizzate
-                          </div>
-                        </div>
-
-                        {/* Data Scadenza */}
-                        {contrattoAttivo.data_scadenza && (
-                          <div className="text-xs text-gray-600 mt-2">
-                            Scadenza: {new Date(contrattoAttivo.data_scadenza).toLocaleDateString('it-IT')}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Contratti Totali */}
-                      {cliente.contratti.length > 1 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
-                          +{cliente.contratti.length - 1} altro{cliente.contratti.length - 1 > 1 ? 'i' : ''} contratt{cliente.contratti.length - 1 > 1 ? 'i' : 'o'}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Nessun contratto ma mostra comunque i macchinari */}
-                      {cliente.macchinari && cliente.macchinari.length > 0 ? (
-                        <div className="space-y-3">
-                          <div className="text-center py-2">
-                            <AlertCircle className="mx-auto text-gray-400 mb-2" size={24} />
-                            <p className="text-sm text-gray-500">Nessun contratto attivo</p>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-gray-600 bg-blue-50 px-2 py-1.5 rounded">
-                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                            </svg>
-                            <span className="font-medium">
-                              {cliente.macchinari.filter(m => m.stato === 'attivo').length} macchinari attivi
-                            </span>
-                            {cliente.macchinari.length > cliente.macchinari.filter(m => m.stato === 'attivo').length && (
-                              <span className="text-gray-500">
-                                ({cliente.macchinari.length} totali)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-4">
-                          <AlertCircle className="mx-auto text-gray-400 mb-2" size={24} />
-                          <p className="text-sm text-gray-500">Nessun contratto attivo</p>
-                          <p className="text-xs text-gray-400 mt-1">Nessun macchinario registrato</p>
-                        </div>
-                      )}
-                    </>
+                    </div>
+                  )}
+                  
+                  {cliente.telefono_principale && (
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Phone size={16} className="text-green-500 flex-shrink-0" />
+                      <span className="font-medium">{cliente.telefono_principale}</span>
+                    </div>
+                  )}
+                  
+                  {cliente.email_riparazioni && (
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Mail size={16} className="text-purple-500 flex-shrink-0" />
+                      <span className="truncate font-medium">{cliente.email_riparazioni}</span>
+                    </div>
                   )}
                 </div>
-              </Link>
-            )
-          })}
-        </div>
 
-        {/* Empty State */}
-        {filteredClienti.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">Nessun cliente trovato</p>
+                {/* Stats Macchinari e Contratti */}
+                <div className="pt-4 border-t-2 border-gray-100">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    {/* Macchinari */}
+                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                      <div className="flex items-center gap-2 mb-1">
+                        <HardDrive size={18} className="text-blue-600" />
+                        <span className="text-xs font-semibold text-blue-600 uppercase">Macchinari</span>
+                      </div>
+                      <div className="text-2xl font-bold text-blue-900">
+                        {cliente.num_macchinari || 0}
+                      </div>
+                    </div>
+
+                    {/* Contratti */}
+                    <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText size={18} className="text-green-600" />
+                        <span className="text-xs font-semibold text-green-600 uppercase">Contratti</span>
+                      </div>
+                      <div className="text-2xl font-bold text-green-900">
+                        {cliente.contratti?.length || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Badge Contratti Attivi - USA nome_contratto! */}
+                  {cliente.contratti && cliente.contratti.length > 0 && (
+                    <div className="space-y-2">
+                      {cliente.contratti.slice(0, 2).map((contratto) => (
+                        <div 
+                          key={contratto.id}
+                          className="flex items-center justify-between bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-lg px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-green-800">
+                              {/* MOSTRA nome_contratto invece di tipo_contratto! */}
+                              {contratto.nome_contratto || contratto.tipo_contratto || 'N/D'}
+                            </span>
+                            <span className="text-xs text-gray-600">
+                              {contratto.num_contratto}
+                            </span>
+                          </div>
+                          {contratto.ore_rimanenti !== null && (
+                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-green-300">
+                              <Clock size={12} className="text-green-600" />
+                              <span className="text-xs font-bold text-green-700">
+                                {contratto.ore_rimanenti}h
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {cliente.contratti.length > 2 && (
+                        <div className="text-center">
+                          <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full border border-gray-300">
+                            +{cliente.contratti.length - 2} altri contratti
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Nessun contratto */}
+                  {(!cliente.contratti || cliente.contratti.length === 0) && (
+                    <div className="text-center py-2">
+                      <span className="text-xs text-gray-500 italic">Nessun contratto attivo</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Note Interne (se presenti) */}
+                {cliente.note_interne && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 italic line-clamp-2">
+                      💡 {cliente.note_interne}
+                    </p>
+                  </div>
+                )}
+              </Link>
+            ))}
           </div>
         )}
       </div>

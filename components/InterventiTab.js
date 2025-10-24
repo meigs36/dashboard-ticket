@@ -31,48 +31,54 @@ export default function InterventiTab({ ticket, onUpdate }) {
     try {
       console.log('🔍 Carico interventi per ticket:', ticket.id)
       
-      // Prova prima con la view
-      let { data, error } = await supabase
-        .from('vw_interventi_ticket')
-        .select('*')
+      // ✅ FIX: Usa num_contratto e nome_contratto (non numero_contratto)
+      const { data, error } = await supabase
+        .from('interventi')
+        .select(`
+          *,
+          tecnico:id_tecnico(nome, cognome, email),
+          contratto:contratto_id(num_contratto, nome_contratto, tipo_contratto)
+        `)
         .eq('ticket_id', ticket.id)
         .order('data_intervento', { ascending: false })
         .order('ora_inizio', { ascending: false })
 
-      // Se la view non esiste o da errore, usa query diretta
       if (error) {
-        console.warn('⚠️ View non disponibile, uso query diretta:', error.message)
-        
-        const queryResult = await supabase
-          .from('interventi')
-          .select(`
-            *,
-            tecnico:utenti!interventi_tecnico_id_fkey(nome, cognome),
-            contratto:contratti(num_contratto, nome_contratto)
-          `)
-          .eq('ticket_id', ticket.id)
-          .order('data_intervento', { ascending: false })
-          .order('ora_inizio', { ascending: false })
-        
-        data = queryResult.data
-        error = queryResult.error
+        console.error('❌ Errore query interventi:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
       }
 
-      if (error) throw error
-
       console.log('✅ Interventi caricati:', data?.length || 0, data)
-      setInterventi(data || [])
+      
+      // Arricchisci i dati per compatibilità con il template
+      const interventiArricchiti = data?.map(int => ({
+        ...int,
+        tecnico_nome: int.tecnico ? `${int.tecnico.nome} ${int.tecnico.cognome}` : 'N/A',
+        num_contratto: int.contratto?.num_contratto || null,
+        nome_contratto: int.contratto?.nome_contratto || int.contratto?.tipo_contratto || null
+      })) || []
+      
+      setInterventi(interventiArricchiti)
       
       // Calcola totali
-      if (data && data.length > 0) {
-        const totaleEffettive = data.reduce((sum, i) => sum + parseFloat(i.durata_effettiva || 0), 0)
-        const totaleAddebitate = data.reduce((sum, i) => sum + parseFloat(i.durata_addebitata || 0), 0)
+      if (interventiArricchiti.length > 0) {
+        const totaleEffettive = interventiArricchiti.reduce((sum, i) => 
+          sum + parseFloat(i.durata_effettiva || 0), 0)
+        
+        const totaleAddebitate = interventiArricchiti.reduce((sum, i) => 
+          sum + parseFloat(i.durata_addebitata || 0), 0)
         
         // Ore scalate: solo interventi che hanno scalato dal contratto
-        const totaleScalate = data.reduce((sum, i) => sum + parseFloat(i.ore_scalate || 0), 0)
+        const totaleScalate = interventiArricchiti.reduce((sum, i) => 
+          sum + parseFloat(i.ore_scalate || 0), 0)
         
-        // 🆕 Ore da fatturare: ore NON coperte da contratto (addebitate - scalate), escluse cortesia
-        const totaleDaFatturare = data
+        // Ore da fatturare: ore NON coperte da contratto, escluse cortesia
+        const totaleDaFatturare = interventiArricchiti
           .filter(i => !i.is_cortesia && !i.fatturato)
           .reduce((sum, i) => {
             const oreAddebitate = parseFloat(i.durata_addebitata || 0)
@@ -81,8 +87,8 @@ export default function InterventiTab({ ticket, onUpdate }) {
             return sum + (oreDaFatturare > 0 ? oreDaFatturare : 0)
           }, 0)
         
-        // 🆕 Ore fatturate: ore già fatturate (stessa logica ma con fatturato=true)
-        const totaleFatturate = data
+        // Ore fatturate: ore già fatturate
+        const totaleFatturate = interventiArricchiti
           .filter(i => !i.is_cortesia && i.fatturato)
           .reduce((sum, i) => {
             const oreAddebitate = parseFloat(i.durata_addebitata || 0)
@@ -92,7 +98,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
           }, 0)
         
         // Ore cortesia
-        const totaleCortesia = data
+        const totaleCortesia = interventiArricchiti
           .filter(i => i.is_cortesia)
           .reduce((sum, i) => sum + parseFloat(i.durata_addebitata || 0), 0)
         
@@ -225,7 +231,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
                       {/* Tecnico */}
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
                         <UserIcon size={14} />
-                        <span>{intervento.tecnico_nome || 'N/A'}</span>
+                        <span>{intervento.tecnico_nome}</span>
                       </div>
 
                       {/* Tipo Attività */}
@@ -233,7 +239,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         📋 {intervento.tipo_attivita || 'N/A'}
                       </div>
 
-                      {/* Contratto o Cortesia */}
+                      {/* Contratto, Cortesia o Ore da Fatturare */}
                       {intervento.is_cortesia ? (
                         <div className="flex items-center gap-2">
                           <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded text-xs font-semibold">
@@ -246,16 +252,22 @@ export default function InterventiTab({ ticket, onUpdate }) {
                             </span>
                           )}
                         </div>
+                      ) : (intervento.modalita_intervento?.toLowerCase() === 'in loco' || 
+                           intervento.modalita_intervento?.toLowerCase() === 'in_loco' ||
+                           intervento.modalita_intervento?.toLowerCase() === 'loco') ? (
+                        <div className="text-sm text-orange-600 dark:text-orange-400 font-medium">
+                          💰 Ore da fatturare: {formatDurata(intervento.durata_addebitata || intervento.durata_effettiva || 0)}
+                        </div>
                       ) : intervento.contratto_id ? (
                         <div className="text-sm text-blue-600 dark:text-blue-400">
-                          💼 {intervento.nome_contratto || 'N/A'} (#{intervento.num_contratto || 'N/A'}) 
+                          💼 {intervento.nome_contratto || 'Contratto'} (#{intervento.num_contratto || 'N/A'}) 
                           <span className="ml-2 font-semibold">
-                            {formatDurata(intervento.ore_scalate)} scalate
+                            {formatDurata(intervento.ore_scalate || 0)} scalate
                           </span>
                         </div>
                       ) : (
-                        <div className="text-sm text-orange-600 dark:text-orange-400 font-medium">
-                          📍 Assistenza in loco (da fatturare)
+                        <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+                          📍 Assistenza remota
                         </div>
                       )}
 

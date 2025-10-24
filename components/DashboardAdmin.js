@@ -96,7 +96,7 @@ export default function DashboardAdmin() {
     try {
       const { data } = await supabase
         .from('ticket')
-        .select('*, clienti(ragione_sociale)')
+        .select('id, numero_ticket, oggetto, stato, priorita, data_apertura, clienti(ragione_sociale)')
         .order('data_apertura', { ascending: false })
         .limit(5)
 
@@ -108,12 +108,23 @@ export default function DashboardAdmin() {
 
   const getPrioritaBadge = (priorita) => {
     const badges = {
-      bassa: 'bg-slate-100 text-slate-800',
-      media: 'bg-yellow-100 text-yellow-800',
-      alta: 'bg-red-100 text-red-800',
-      critica: 'bg-red-600 text-white'
+      bassa: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
+      media: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      alta: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+      critica: 'bg-red-600 text-white dark:bg-red-700'
     }
-    return badges[priorita] || 'bg-gray-100 text-gray-800'
+    return badges[priorita] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+  }
+
+  const getStatoBadge = (stato) => {
+    const badges = {
+      aperto: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      assegnato: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+      in_lavorazione: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+      risolto: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      chiuso: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+    }
+    return badges[stato] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
   }
 
   if (stats.loading) {
@@ -253,78 +264,76 @@ export default function DashboardAdmin() {
                 </div>
                 <span className="font-medium text-gray-900 dark:text-white">Nuovo Ticket</span>
               </Link>
-
+              
               <Link
-                href="/analytics"
+                href="/macchinari"
                 className="group flex items-center gap-3 p-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
               >
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-2 rounded-lg">
-                  <BarChart3 size={18} className="text-white" />
+                <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-2 rounded-lg">
+                  <HardDrive size={18} className="text-white" />
                 </div>
-                <span className="font-medium text-gray-900 dark:text-white">Report Analytics</span>
+                <span className="font-medium text-gray-900 dark:text-white">Gestisci Macchinari</span>
               </Link>
             </div>
           </div>
 
-          {/* Ticket Recenti */}
+          {/* Ticket Recenti - 🆕 CON LINK CLICCABILI */}
           <div className="lg:col-span-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Ticket Recenti</h2>
-              <Link 
+              <Link
                 href="/ticket"
-                className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1 group"
               >
-                <span>Vedi tutti</span>
-                <ArrowRight size={16} />
+                Vedi tutti
+                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
             
-            <div className="space-y-3">
-              {recentTickets.map(ticket => (
-                <Link
-                  key={ticket.id}
-                  href={`/ticket`}
-                  className="block p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
-                      {ticket.numero_ticket}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getPrioritaBadge(ticket.priorita)}`}>
-                      {ticket.priorita?.toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-                    {ticket.oggetto}
-                  </p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {ticket.clienti?.ragione_sociale}
-                  </p>
-                </Link>
-              ))}
-              
-              {recentTickets.length === 0 && (
-                <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-                  Nessun ticket recente
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Info Box */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 rounded-2xl p-6 shadow-2xl">
-          <div className="absolute inset-0 bg-white/10 backdrop-blur-sm" />
-          <div className="relative z-10 flex items-start gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
-              <Zap className="text-white" size={24} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-white mb-1">Sistema Operativo</h3>
-              <p className="text-sm text-white/90">
-                Dashboard connessa a Supabase. {stats.totalClienti} clienti, {stats.totalMacchinari} macchinari e {stats.ticketAperti} ticket in gestione.
-              </p>
-            </div>
+            {recentTickets.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Ticket size={48} className="mx-auto mb-2 opacity-50" />
+                <p>Nessun ticket recente</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentTickets.map((ticket) => (
+                  <Link 
+                    key={ticket.id} 
+                    href={`/ticket?highlight=${ticket.id}`}
+                    className="block"
+                  >
+                    <div className="group p-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all cursor-pointer">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
+                              {ticket.numero_ticket}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatoBadge(ticket.stato)}`}>
+                              {ticket.stato}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getPrioritaBadge(ticket.priorita)}`}>
+                              {ticket.priorita}
+                            </span>
+                          </div>
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+                            {ticket.oggetto}
+                          </h4>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {ticket.clienti?.ragione_sociale || 'Cliente sconosciuto'}
+                          </p>
+                        </div>
+                        <ArrowRight 
+                          size={20} 
+                          className="text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" 
+                        />
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
