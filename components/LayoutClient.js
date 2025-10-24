@@ -8,7 +8,9 @@ export default function LayoutClient({ children }) {
   
   // Pagine dove NON mostrare la navbar
   const pagineSenzaNavbar = ['/login', '/signup', '/reset-password', '/auth']
-  const mostraNavbar = !pagineSenzaNavbar.some(path => pathname?.startsWith(path))
+  
+  // Nascondi navbar su homepage (/) o su pagine auth
+  const mostraNavbar = pathname !== '/' && !pagineSenzaNavbar.some(path => pathname?.startsWith(path))
 
   return (
     <>

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import './pwa.css';
 
 @layer base {
   html {
