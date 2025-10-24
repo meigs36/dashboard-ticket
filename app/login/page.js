@@ -14,6 +14,12 @@ export default function LoginPage() {
   const { signIn, user, userProfile } = useAuth()
   const router = useRouter()
 
+  // DEBUG TEMPORANEO - Rimuovi dopo aver risolto
+  useEffect(() => {
+    console.log('🔍 Auth object:', { signIn, user, userProfile })
+    console.log('🔍 signIn type:', typeof signIn)
+  }, [signIn, user, userProfile])
+
   // Redirect se già autenticato
   useEffect(() => {
     if (user && userProfile) {
@@ -29,6 +35,12 @@ export default function LoginPage() {
 
     try {
       console.log('🔐 Invio form login...')
+      console.log('🔍 signIn prima di chiamarlo:', signIn)
+      
+      if (typeof signIn !== 'function') {
+        throw new Error('signIn non è una funzione! Tipo: ' + typeof signIn)
+      }
+      
       const { error: signInError } = await signIn(email, password)
       
       if (signInError) {
@@ -36,8 +48,6 @@ export default function LoginPage() {
       }
       
       console.log('✅ Login completato, attendo caricamento profilo...')
-      
-      // Aspetta un momento per far caricare il profilo
       await new Promise(resolve => setTimeout(resolve, 500))
       
       console.log('➡️ Redirect a dashboard')
@@ -58,7 +68,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-6">
             <div className="relative w-48 h-24">
               <Image
-                src="/logo.webp"
+                src="/Logo.webp"
                 alt="Odonto Service Logo"
                 fill
                 className="object-contain"
@@ -100,12 +110,12 @@ export default function LoginPage() {
                 </div>
                 <input
                   type="email"
-                  required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  placeholder="tuo@email.it"
-                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="admin@demo.it"
+                  required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -121,52 +131,33 @@ export default function LoginPage() {
                 </div>
                 <input
                   type="password"
-                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   placeholder="••••••••"
-                  disabled={loading}
+                  required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
 
-            {/* Submit Button */}
+            {/* Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>Accesso in corso...</span>
-                </>
-              ) : (
-                <>
-                  <LogIn size={20} />
-                  <span>Accedi</span>
-                </>
-              )}
+              <LogIn size={20} />
+              {loading ? 'Accesso in corso...' : 'Accedi'}
             </button>
           </form>
 
-          {/* Footer */}
+          {/* Link recupero password */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Password dimenticata?{' '}
-              <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                Recuperala qui
-              </a>
-            </p>
+            <a href="/forgot-password" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+              Password dimenticata? Recuperala qui
+            </a>
           </div>
-        </div>
-
-        {/* Info Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            © 2025 Odonto Service - Sistema Gestione Ticket
-          </p>
         </div>
       </div>
     </div>

@@ -1,9 +1,9 @@
 import "./globals.css";
 import PWAInstaller from "@/components/PWAInstaller";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { AuthProvider } from "@/contexts/AuthContext";
 
-// Font di sistema invece di Google Fonts
-const fontClass = "font-sans"; // Usa font-family di Tailwind
+const fontClass = "font-sans";
 
 export const metadata = {
   title: "Odonto Service - Sistema Ticket",
@@ -60,9 +60,11 @@ export default function RootLayout({ children }) {
         <meta name="theme-color" content="#1E90FF" />
       </head>
       <body className={fontClass}>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <ServiceWorkerRegister />
         <PWAInstaller />
-        {children}
       </body>
     </html>
   );
