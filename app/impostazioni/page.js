@@ -114,7 +114,7 @@ export default function ImpostazioniPage() {
       const { data: ticketData } = await supabase
         .from('ticket')
         .select('*')
-        .eq('tecnico_assegnato_id', userProfile.id)
+        .eq('id_tecnico_assegnato', userProfile.id)
 
       // Interventi
       const { data: interventiData } = await supabase
