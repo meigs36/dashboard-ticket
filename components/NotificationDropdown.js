@@ -103,12 +103,12 @@ export default function NotificationDropdown() {
             oggetto,
             priorita,
             stato,
-            created_at,
+            data_creazione,
             cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)
           `)
           .eq('id_tecnico_assegnato', userProfile.id)
           .in('stato', ['aperto', 'in_lavorazione'])
-          .order('created_at', { ascending: false })
+          .order('data_creazione', { ascending: false })
           .limit(5)
 
         ticketAssegnati?.forEach(ticket => {
@@ -122,7 +122,7 @@ export default function NotificationDropdown() {
             priorita: isUrgente ? 'alta' : 'normale',
             icon: Ticket,
             link: `/ticket/${ticket.id}`,
-            timestamp: ticket.created_at
+            timestamp: ticket.data_creazione
           })
         })
       }
@@ -137,13 +137,13 @@ export default function NotificationDropdown() {
             oggetto,
             priorita,
             stato,
-            created_at,
+            data_creazione,
             cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)
           `)
           .eq('priorita', 'urgente')
           .eq('stato', 'aperto')
           .is('id_tecnico_assegnato', null)
-          .order('created_at', { ascending: false })
+          .order('data_creazione', { ascending: false })
           .limit(3)
 
         ticketUrgenti?.forEach(ticket => {
@@ -156,7 +156,7 @@ export default function NotificationDropdown() {
             priorita: 'alta',
             icon: AlertCircle,
             link: `/ticket/${ticket.id}`,
-            timestamp: ticket.created_at
+            timestamp: ticket.data_creazione
           })
         })
       }

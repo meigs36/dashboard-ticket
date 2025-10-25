@@ -61,7 +61,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
         .from('ticket_note')
         .select('*')
         .eq('id_ticket', ticket.id)
-        .order('created_at', { ascending: false })
+        .order('data_creazione', { ascending: false })
 
       if (noteError) {
         console.error('❌ Errore Supabase note:', noteError)
@@ -124,7 +124,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
         .from('ticket_storico')
         .select('*')
         .eq('id_ticket', ticket.id)
-        .order('created_at', { ascending: false })
+        .order('data_creazione', { ascending: false })
 
       if (storicoError) {
         console.error('❌ Errore Supabase storico:', storicoError)
@@ -630,7 +630,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                                 {nota.utente_nome}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {new Date(nota.created_at).toLocaleString('it-IT')}
+                                {new Date(nota.data_creazione).toLocaleString('it-IT')}
                               </p>
                             </div>
                           </div>
@@ -733,7 +733,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                               {getAzioneLabel(entry.azione)}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {new Date(entry.created_at).toLocaleString('it-IT')}
+                              {new Date(entry.data_creazione).toLocaleString('it-IT')}
                             </p>
                           </div>
                           <p className="text-xs text-gray-600 dark:text-gray-400">

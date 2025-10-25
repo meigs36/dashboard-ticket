@@ -450,7 +450,7 @@ export default function ProfiloPage() {
                     </label>
                     <input
                       type="text"
-                      value={new Date(userProfile.created_at).toLocaleDateString('it-IT', {
+                      value={new Date(userProfile.data_creazione).toLocaleDateString('it-IT', {
                         day: '2-digit',
                         month: 'long',
                         year: 'numeric'
