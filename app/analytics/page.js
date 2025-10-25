@@ -33,7 +33,7 @@ export default function AnalyticsPage() {
         .from('ticket')
         .select(`
           *,
-          clienti(ragione_sociale),
+          cliente:clienti!ticket_id_cliente_fkey(ragione_sociale),
           utenti:id_tecnico_assegnato(nome, cognome)
         `)
         .gte('data_apertura', dataInizio.toISOString())

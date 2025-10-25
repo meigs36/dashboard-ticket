@@ -77,7 +77,7 @@ export default function MacchinariPage() {
         .from('macchinari')
         .select(`
           *,
-          clienti(
+          cliente:clienti!ticket_id_cliente_fkey(
             id,
             ragione_sociale,
             codice_cliente,

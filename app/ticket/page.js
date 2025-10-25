@@ -43,7 +43,7 @@ export default function TicketPage() {
         .from('ticket')
         .select(`
           *,
-          clienti(
+          cliente:clienti!ticket_id_cliente_fkey(
             id,
             ragione_sociale, 
             codice_cliente,

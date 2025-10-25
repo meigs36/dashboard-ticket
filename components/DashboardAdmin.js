@@ -96,7 +96,7 @@ export default function DashboardAdmin() {
     try {
       const { data } = await supabase
         .from('ticket')
-        .select('id, numero_ticket, oggetto, stato, priorita, data_apertura, clienti(ragione_sociale)')
+        .select('id, numero_ticket, oggetto, stato, priorita, data_apertura, cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)')
         .order('data_apertura', { ascending: false })
         .limit(5)
 

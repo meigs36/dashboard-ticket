@@ -104,7 +104,7 @@ export default function NotificationDropdown() {
             priorita,
             stato,
             created_at,
-            cliente:clienti!ticket_cliente_id_fkey(ragione_sociale)
+            cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)
           `)
           .eq('id_tecnico_assegnato', userProfile.id)
           .in('stato', ['aperto', 'in_lavorazione'])
@@ -138,7 +138,7 @@ export default function NotificationDropdown() {
             priorita,
             stato,
             created_at,
-            cliente:clienti!ticket_cliente_id_fkey(ragione_sociale)
+            cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)
           `)
           .eq('priorita', 'urgente')
           .eq('stato', 'aperto')
@@ -173,7 +173,7 @@ export default function NotificationDropdown() {
           ticket:ticket!interventi_ticket_id_fkey(
             numero_ticket,
             oggetto,
-            cliente:clienti!ticket_cliente_id_fkey(ragione_sociale)
+            cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)
           )
         `)
         .eq('tecnico_id', userProfile.id)
