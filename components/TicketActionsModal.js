@@ -54,14 +54,14 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   async function loadNote() {
     setLoadingNote(true)
     try {
-      console.log('🔍 Carico note per ticket:', ticket.id)
+      console.log('📝 Carico note per ticket:', ticket.id)
       
       // Carica note senza JOIN automatico
       const { data: noteData, error: noteError } = await supabase
         .from('ticket_note')
         .select('*')
         .eq('id_ticket', ticket.id)
-        .order('data_creazione', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (noteError) {
         console.error('❌ Errore Supabase note:', noteError)
@@ -88,7 +88,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
             
             return {
               ...nota,
-              utente,
+              autore: utente,
               utente_nome: utente ? `${utente.nome} ${utente.cognome}` : 'Utente Sconosciuto',
               utente_email: utente?.email || null
             }
@@ -96,7 +96,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
             console.error('Errore caricamento utente per nota:', nota.id, err)
             return {
               ...nota,
-              utente: null,
+              autore: null,
               utente_nome: 'Utente Sconosciuto',
               utente_email: null
             }
@@ -107,7 +107,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
       console.log('✅ Note caricate con utenti:', noteConUtenti.length)
       setNote(noteConUtenti)
     } catch (error) {
-      console.error('Errore caricamento note:', error)
+      console.error('❌ Errore caricamento note:', error)
       setNote([])
     } finally {
       setLoadingNote(false)
@@ -117,14 +117,14 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   async function loadStorico() {
     setLoadingStorico(true)
     try {
-      console.log('🔍 Carico storico per ticket:', ticket.id)
+      console.log('📜 Carico storico per ticket:', ticket.id)
       
       // Carica storico senza JOIN automatico
       const { data: storicoData, error: storicoError } = await supabase
         .from('ticket_storico')
         .select('*')
         .eq('id_ticket', ticket.id)
-        .order('data_creazione', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (storicoError) {
         console.error('❌ Errore Supabase storico:', storicoError)
@@ -152,7 +152,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
             return {
               ...item,
               utente,
-              utente_nome: utente ? `${utente.nome} ${utente.cognome}` : 'Utente Sconosciuto',
+              utente_nome: utente ? `${utente.nome} ${utente.cognome}` : 'Sistema',
               utente_email: utente?.email || null
             }
           } catch (err) {
@@ -160,7 +160,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
             return {
               ...item,
               utente: null,
-              utente_nome: 'Utente Sconosciuto',
+              utente_nome: 'Sistema',
               utente_email: null
             }
           }
@@ -170,10 +170,97 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
       console.log('✅ Storico caricato con utenti:', storicoConUtenti.length)
       setStorico(storicoConUtenti)
     } catch (error) {
-      console.error('Errore caricamento storico:', error)
+      console.error('❌ Errore caricamento storico:', error)
       setStorico([])
     } finally {
       setLoadingStorico(false)
+    }
+  }
+
+  async function handleAggiungiNota() {
+    if (!nuovaNota.trim()) return
+
+    setLoading(true)
+    try {
+      const { error } = await supabase.rpc('add_ticket_note', {
+        p_id_ticket: ticket.id,
+        p_tipo: tipoNota,
+        p_contenuto: nuovaNota.trim()
+      })
+
+      if (error) throw error
+
+      alert('✅ Nota aggiunta con successo!')
+      setNuovaNota('')
+      loadNote()
+      if (onUpdate) onUpdate()
+    } catch (error) {
+      console.error('❌ Errore aggiunta nota:', error)
+      alert('❌ Errore: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAssegnaTecnico() {
+    if (!tecnicoAssegnato || tecnicoAssegnato === ticket.id_tecnico_assegnato) return
+
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('ticket')
+        .update({ 
+          id_tecnico_assegnato: tecnicoAssegnato,
+          stato: ticket.stato === 'aperto' ? 'assegnato' : ticket.stato
+        })
+        .eq('id', ticket.id)
+
+      if (error) throw error
+
+      const tecnico = tecnici.find(t => t.id === tecnicoAssegnato)
+      await supabase.rpc('add_ticket_note', {
+        p_id_ticket: ticket.id,
+        p_tipo: 'assegnazione',
+        p_contenuto: `Ticket assegnato a ${tecnico.nome} ${tecnico.cognome}`
+      })
+
+      alert('✅ Tecnico assegnato!')
+      if (onUpdate) onUpdate()
+      onClose()
+    } catch (error) {
+      console.error('❌ Errore assegnazione:', error)
+      alert('❌ Errore: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCambiaPriorita() {
+    if (nuovaPriorita === ticket.priorita) return
+
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('ticket')
+        .update({ priorita: nuovaPriorita })
+        .eq('id', ticket.id)
+
+      if (error) throw error
+
+      await supabase.rpc('add_ticket_note', {
+        p_id_ticket: ticket.id,
+        p_tipo: 'cambio_priorita',
+        p_contenuto: `Priorità cambiata da "${ticket.priorita}" a "${nuovaPriorita}"`
+      })
+
+      alert('✅ Priorità aggiornata!')
+      if (onUpdate) onUpdate()
+      onClose()
+    } catch (error) {
+      console.error('❌ Errore cambio priorità:', error)
+      alert('❌ Errore: ' + error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -258,102 +345,10 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
       })
 
       alert('✅ Stato aggiornato!')
-      onUpdate()
+      if (onUpdate) onUpdate()
       onClose()
     } catch (error) {
-      console.error('Errore cambio stato:', error)
-      alert('❌ Errore: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleCambiaPriorita() {
-    if (nuovaPriorita === ticket.priorita) return
-
-    setLoading(true)
-    try {
-      const { error } = await supabase
-        .from('ticket')
-        .update({ priorita: nuovaPriorita })
-        .eq('id', ticket.id)
-
-      if (error) throw error
-
-      // Aggiungi nota automatica
-      await supabase.rpc('add_ticket_note', {
-        p_id_ticket: ticket.id,
-        p_tipo: 'cambio_priorita',
-        p_contenuto: `Priorità cambiata da "${ticket.priorita}" a "${nuovaPriorita}"`
-      })
-
-      alert('✅ Priorità aggiornata!')
-      onUpdate()
-      onClose()
-    } catch (error) {
-      console.error('Errore cambio priorità:', error)
-      alert('❌ Errore: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleAssegnaTecnico() {
-    if (tecnicoAssegnato === ticket.id_tecnico_assegnato) return
-
-    setLoading(true)
-    try {
-      const { error } = await supabase
-        .from('ticket')
-        .update({ 
-          id_tecnico_assegnato: tecnicoAssegnato || null,
-          stato: tecnicoAssegnato ? 'assegnato' : 'aperto'
-        })
-        .eq('id', ticket.id)
-
-      if (error) throw error
-
-      const tecnico = tecnici.find(t => t.id === tecnicoAssegnato)
-      const nomeCompleto = tecnico ? `${tecnico.nome} ${tecnico.cognome}` : 'Nessuno'
-
-      await supabase.rpc('add_ticket_note', {
-        p_id_ticket: ticket.id,
-        p_tipo: 'assegnazione',
-        p_contenuto: `Ticket assegnato a: ${nomeCompleto}`
-      })
-
-      alert('✅ Tecnico assegnato!')
-      onUpdate()
-      onClose()
-    } catch (error) {
-      console.error('Errore assegnazione:', error)
-      alert('❌ Errore: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleAggiungiNota() {
-    if (!nuovaNota.trim()) return
-
-    setLoading(true)
-    try {
-      const { error } = await supabase
-        .from('ticket_note')
-        .insert({
-          id_ticket: ticket.id,
-          id_utente: userProfile.id,
-          tipo: tipoNota,
-          contenuto: nuovaNota
-        })
-
-      if (error) throw error
-
-      alert('✅ Nota aggiunta!')
-      setNuovaNota('')
-      loadNote()
-    } catch (error) {
-      console.error('Errore aggiunta nota:', error)
+      console.error('❌ Errore cambio stato:', error)
       alert('❌ Errore: ' + error.message)
     } finally {
       setLoading(false)
@@ -364,12 +359,24 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
     const colors = {
       'aperto': 'text-blue-600',
       'assegnato': 'text-purple-600',
-      'in_lavorazione': 'text-orange-600',
-      'in_attesa': 'text-yellow-600',
+      'in_lavorazione': 'text-yellow-600',
+      'in_attesa': 'text-orange-600',
       'risolto': 'text-green-600',
       'chiuso': 'text-gray-600'
     }
     return colors[stato] || 'text-gray-600'
+  }
+
+  function getStatoIcon(stato) {
+    const icons = {
+      'aperto': '🔵',
+      'assegnato': '🟣',
+      'in_lavorazione': '🟠',
+      'in_attesa': '🟡',
+      'risolto': '🟢',
+      'chiuso': '⚫'
+    }
+    return icons[stato] || '⚪'
   }
 
   function getPrioritaColor(priorita) {
@@ -415,55 +422,61 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
           </button>
         </div>
 
-        {/* Tabs Navigation */}
-        <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 flex gap-2 px-6 pt-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('azioni')}
-            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-              activeTab === 'azioni'
-                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-            }`}
-          >
-            <CheckCircle size={18} />
-            Azioni
-          </button>
+        {/* Tabs Navigation - FIX COMPLETO */}
+        <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4">
+            <div className="pl-6" /> {/* Spacer sinistro */}
+            
+            <button
+              onClick={() => setActiveTab('azioni')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
+                activeTab === 'azioni'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              }`}
+            >
+              <CheckCircle size={18} />
+              Azioni
+            </button>
 
-          {/* ⭐ NUOVO TAB INTERVENTI */}
-          <button
-            onClick={() => setActiveTab('interventi')}
-            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-              activeTab === 'interventi'
-                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-            }`}
-          >
-            <Briefcase size={18} />
-            Interventi
-          </button>
+            <button
+              onClick={() => setActiveTab('interventi')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
+                activeTab === 'interventi'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              }`}
+            >
+              <Briefcase size={18} />
+              Interventi
+            </button>
 
-          <button
-            onClick={() => setActiveTab('note')}
-            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-              activeTab === 'note'
-                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-            }`}
-          >
-            <MessageSquare size={18} />
-            Note
-          </button>
-          <button
-            onClick={() => setActiveTab('storico')}
-            className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-              activeTab === 'storico'
-                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-            }`}
-          >
-            <History size={18} />
-            Storico
-          </button>
+            <button
+              onClick={() => setActiveTab('note')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
+                activeTab === 'note'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              }`}
+            >
+              <MessageSquare size={18} />
+              Note
+            </button>
+
+            <button
+              onClick={() => setActiveTab('storico')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
+                activeTab === 'storico'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              }`}
+            >
+              <History size={18} />
+              Storico
+            </button>
+            
+            <div className="pr-6" /> {/* Spacer destro */}
+          </div>
         </div>
 
         {/* Tab Content - Scrollable */}
@@ -495,14 +508,9 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                     disabled={loading || nuovoStato === ticket.stato}
                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? 'Salvataggio...' : 'Aggiorna'}
+                    {loading ? 'Salvataggio...' : 'Cambia'}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Stato attuale: <span className={`font-semibold ${getStatoColor(ticket.stato)}`}>
-                    {ticket.stato?.toUpperCase()}
-                  </span>
-                </p>
               </div>
 
               {/* Cambia Priorità */}
@@ -519,22 +527,17 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                   >
                     <option value="bassa">🟢 Bassa</option>
                     <option value="media">🟡 Media</option>
-                    <option value="alta">🔴 Alta</option>
-                    <option value="critica">🚨 Critica</option>
+                    <option value="alta">🟠 Alta</option>
+                    <option value="critica">🔴 Critica</option>
                   </select>
                   <button
                     onClick={handleCambiaPriorita}
                     disabled={loading || nuovaPriorita === ticket.priorita}
                     className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? 'Salvataggio...' : 'Aggiorna'}
+                    {loading ? 'Salvataggio...' : 'Cambia'}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Priorità attuale: <span className={`font-semibold ${getPrioritaColor(ticket.priorita)}`}>
-                    {ticket.priorita?.toUpperCase()}
-                  </span>
-                </p>
               </div>
 
               {/* Assegna Tecnico */}
@@ -549,8 +552,8 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                     onChange={(e) => setTecnicoAssegnato(e.target.value)}
                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="">Non assegnato</option>
-                    {tecnici.map((tecnico) => (
+                    <option value="">-- Seleziona Tecnico --</option>
+                    {tecnici.map(tecnico => (
                       <option key={tecnico.id} value={tecnico.id}>
                         {tecnico.nome} {tecnico.cognome}
                       </option>
@@ -558,7 +561,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                   </select>
                   <button
                     onClick={handleAssegnaTecnico}
-                    disabled={loading || tecnicoAssegnato === ticket.id_tecnico_assegnato}
+                    disabled={loading || !tecnicoAssegnato || tecnicoAssegnato === ticket.id_tecnico_assegnato}
                     className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? 'Salvataggio...' : 'Assegna'}
@@ -618,32 +621,28 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                   <p className="text-center text-gray-500">Caricamento...</p>
                 ) : note.length > 0 ? (
                   <div className="space-y-3">
-                    {note.map((nota) => (
-                      <div key={nota.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    {note.map(nota => (
+                      <div 
+                        key={nota.id} 
+                        className="bg-white dark:bg-gray-700 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-600"
+                      >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                              {nota.utente_nome?.split(" ").map(n => n[0]).join("").slice(0, 2) || "U"}
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white text-sm">
-                                {nota.utente_nome}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {new Date(nota.data_creazione).toLocaleString('it-IT')}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {nota.autore?.nome} {nota.autore?.cognome}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded ${
                               nota.tipo === 'nota_interna' 
-                                ? 'bg-gray-200 text-gray-700' 
-                                : 'bg-blue-100 text-blue-700'
+                                ? 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
                             }`}>
                               {nota.tipo === 'nota_interna' ? '📝 Interna' : '💬 Cliente'}
                             </span>
-                            
-                            {/* 🆕 Pulsanti Modifica/Elimina */}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">
+                              {new Date(nota.created_at).toLocaleString('it-IT')}
+                            </span>
                             {nota.id_utente === userProfile?.id && (
                               <div className="flex gap-1">
                                 <button
@@ -651,24 +650,22 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                                     setNotaInModifica(nota.id)
                                     setTestoModifica(nota.contenuto)
                                   }}
-                                  className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                                  title="Modifica nota"
+                                  className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded transition-colors"
+                                  title="Modifica"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                  ✏️
                                 </button>
                                 <button
                                   onClick={() => handleEliminaNota(nota.id)}
-                                  className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                  title="Elimina nota"
+                                  className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded transition-colors"
+                                  title="Elimina"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                  🗑️
                                 </button>
                               </div>
                             )}
                           </div>
                         </div>
-                        
-                        {/* Contenuto nota o form modifica */}
                         {notaInModifica === nota.id ? (
                           <div className="space-y-2">
                             <textarea
@@ -719,44 +716,32 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                 <p className="text-center text-gray-500">Caricamento...</p>
               ) : storico.length > 0 ? (
                 <div className="space-y-3">
-                  {storico.map((entry) => (
-                    <div key={entry.id} className="flex gap-4 items-start">
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
-                          <History className="text-white" size={18} />
-                        </div>
-                      </div>
-                      <div className="flex-1 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                              {getAzioneLabel(entry.azione)}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(entry.data_creazione).toLocaleString('it-IT')}
-                            </p>
+                  {storico.map(evento => (
+                    <div 
+                      key={evento.id}
+                      className="bg-white dark:bg-gray-700 rounded-lg p-4 shadow-sm border-l-4 border-blue-500"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-gray-900 dark:text-white">
+                              {getAzioneLabel(evento.azione)}
+                            </span>
                           </div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            {entry.utente_nome}
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            {evento.descrizione}
                           </p>
-                        </div>
-                        {entry.valore_precedente && entry.valore_nuovo && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="text-red-600 dark:text-red-400 line-through">
-                              {entry.valore_precedente}
-                            </span>
-                            <span className="text-gray-400">→</span>
-                            <span className="text-green-600 dark:text-green-400 font-semibold">
-                              {entry.valore_nuovo}
-                            </span>
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span>👤 {evento.utente?.nome} {evento.utente?.cognome}</span>
+                            <span>📅 {new Date(evento.created_at).toLocaleString('it-IT')}</span>
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-gray-500 py-8">Nessuna modifica registrata</p>
+                <p className="text-center text-gray-500 py-8">Nessun evento nello storico</p>
               )}
             </div>
           )}
