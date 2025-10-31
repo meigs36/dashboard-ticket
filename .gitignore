@@ -48,3 +48,4 @@ yarn-error.log*
 # Lock files (scegli uno)
 # package-lock.json  # Decommenta se usi npm
 # yarn.lock          # Decommenta se usi yarn
+*.bkg
