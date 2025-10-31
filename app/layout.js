@@ -2,7 +2,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { Providers } from '@/components/Providers'
 import LayoutClient from '@/components/LayoutClient'
 import PWAInstaller from "@/components/PWAInstaller"
-import ServiceWorkerRegister from "@/components/ServiceWorkerRegister"
+// import ServiceWorkerRegister from "@/components/ServiceWorkerRegister" // ← COMMENTATO PER FIX 401
 import './globals.css'
 
 export const metadata = {
@@ -59,7 +59,7 @@ export default function RootLayout({ children }) {
             </LayoutClient>
           </AuthProvider>
         </Providers>
-        <ServiceWorkerRegister />
+        {/* <ServiceWorkerRegister /> */}
         <PWAInstaller />
       </body>
     </html>
