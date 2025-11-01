@@ -75,20 +75,13 @@ export function AuthProvider({ children }) {
       console.log('👤 STEP 1: Inizio caricamento profilo')
       console.log('User ID:', userId)
       
-      // ⏰ FIX: Aggiungi timeout di 10 secondi per evitare blocchi
-      const queryPromise = supabase
-        .from('utenti')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('TIMEOUT_ERROR')), 10000)
-      )
-      
-      console.log('👤 STEP 2: Esecuzione query con timeout 10s...')
-      const result = await Promise.race([queryPromise, timeoutPromise])
-      
+      console.log('👤 STEP 2: Esecuzione query...')
+const result = await supabase
+  .from('utenti')
+  .select('*')
+  .eq('id', userId)
+  .single()
+  
       if (result.error) {
         console.error('❌ Errore database:', result.error)
         
