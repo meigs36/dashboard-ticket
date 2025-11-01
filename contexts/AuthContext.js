@@ -71,75 +71,72 @@ export function AuthProvider({ children }) {
   }
 
   async function loadUserProfile(userId) {
-  console.log('==================================')
-  console.log('👤 STEP 1: Inizio caricamento profilo')
-  console.log('User ID:', userId)
-  console.log('==================================')
-  
-  try {
-    console.log('👤 STEP 2: Preparazione query Supabase...')
-    console.log('Tabella: utenti')
-    console.log('Filtro: id =', userId)
-    
-    const startTime = Date.now()
-    
-    const { data, error } = await supabase
-      .from('utenti')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    
-    const endTime = Date.now()
-    const duration = endTime - startTime
-    
-    console.log('==================================')
-    console.log('👤 STEP 3: Risposta ricevuta')
-    console.log('Tempo impiegato:', duration, 'ms')
-    console.log('Data ricevuta:', data)
-    console.log('Error ricevuto:', error)
-    console.log('==================================')
-
-    if (error) {
-      console.error('❌ STEP 4: ERRORE nel caricamento profilo')
-      console.error('Error code:', error.code)
-      console.error('Error message:', error.message)
-      console.error('Error details:', error.details)
-      console.error('Error hint:', error.hint)
+    try {
+      console.log('👤 STEP 1: Inizio caricamento profilo')
+      console.log('User ID:', userId)
       
-      // Se l'errore è che il profilo non esiste
-      if (error.code === 'PGRST116') {
-        console.error('❌ PROFILO NON TROVATO per user:', userId)
-        alert('⚠️ Il tuo profilo utente non è stato trovato nel database. Contatta l\'amministratore.')
+      // ⏰ FIX: Aggiungi timeout di 10 secondi per evitare blocchi
+      const queryPromise = supabase
+        .from('utenti')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('TIMEOUT_ERROR')), 10000)
+      )
+      
+      console.log('👤 STEP 2: Esecuzione query con timeout 10s...')
+      const result = await Promise.race([queryPromise, timeoutPromise])
+      
+      if (result.error) {
+        console.error('❌ Errore database:', result.error)
+        
+        // Profilo non trovato
+        if (result.error.code === 'PGRST116') {
+          console.error('❌ PROFILO NON TROVATO per user:', userId)
+          throw new Error('PROFILE_NOT_FOUND')
+        }
+        
+        throw result.error
       }
       
-      throw error
+      console.log('✅ STEP 3: Profilo caricato:', result.data)
+      setUserProfile(result.data)
+      
+    } catch (error) {
+      console.error('❌ Errore caricamento profilo:', error)
+      
+      // ⚠️ FALLBACK: Timeout o errore RLS → usa profilo minimale
+      if (error.message === 'TIMEOUT_ERROR') {
+        console.warn('⚠️ TIMEOUT - Possibile problema RLS su Supabase')
+        console.warn('📋 Uso profilo minimale temporaneo')
+        
+        setUserProfile({
+          id: userId,
+          email: user?.email || 'unknown@email.com',
+          ruolo: 'tecnico', // Ruolo default
+          nome: 'Utente',
+          cognome: 'Temporaneo',
+          _isFallback: true,
+          _error: 'timeout'
+        })
+        
+        // Mostra alert all'utente
+        setTimeout(() => {
+          alert('⚠️ Problema di caricamento profilo. Funzionalità limitate. Verifica le policy RLS su Supabase.')
+        }, 1000)
+        
+      } else if (error.message === 'PROFILE_NOT_FOUND') {
+        console.error('❌ Profilo non esiste nel database')
+        setUserProfile(null)
+        alert('❌ Profilo utente non trovato. Contatta l\'amministratore.')
+      } else {
+        setUserProfile(null)
+      }
     }
-    
-    if (!data) {
-      console.error('❌ STEP 4: ERRORE - Dati vuoti')
-      throw new Error('Profilo vuoto dalla query')
-    }
-    
-    console.log('✅ STEP 4: SUCCESSO - Profilo caricato!')
-    console.log('Nome:', data.nome)
-    console.log('Cognome:', data.cognome)
-    console.log('Ruolo:', data.ruolo)
-    console.log('==================================')
-    
-    setUserProfile(data)
-    
-  } catch (error) {
-    console.error('==================================')
-    console.error('❌ ERRORE GENERALE caricamento profilo')
-    console.error('Tipo errore:', error.constructor.name)
-    console.error('Messaggio:', error.message)
-    console.error('Stack:', error.stack)
-    console.error('==================================')
-    setUserProfile(null)
   }
-}
 
-  // ✅ NUOVA FUNZIONE: Ricarica profilo senza reload pagina
   async function refreshProfile() {
     if (!user?.id) {
       console.warn('⚠️ Impossibile ricaricare profilo: utente non loggato')
@@ -279,7 +276,7 @@ export function AuthProvider({ children }) {
     signOut,
     resetPassword,
     updatePassword,
-    refreshProfile, // ✅ AGGIUNTA: Esporta la nuova funzione
+    refreshProfile,
     isAdmin,
     isTecnico
   }
