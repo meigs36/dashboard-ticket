@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -21,77 +21,89 @@ export function AuthProvider({ children }) {
   const router = useRouter()
 
   useEffect(() => {
-    checkUser()
+    // Verifica sessione iniziale
+    checkSession()
 
+    // Listener per cambio auth
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔐 Auth State Change:', event, session?.user?.email)
-        const currentUser = session?.user ?? null
-        setUser(currentUser)
+        console.log('🔐 Auth event:', event)
         
-        if (currentUser) {
-          // 🔥 BYPASS DATABASE - Crea profilo virtuale
-          createVirtualProfile(currentUser)
-        } else {
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user)
+          await loadUserProfile(session.user.id)
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null)
           setUserProfile(null)
         }
-        
-        setLoading(false)
       }
     )
 
     return () => {
-      authListener?.subscription.unsubscribe()
+      authListener?.subscription?.unsubscribe()
     }
   }, [])
 
-  async function checkUser() {
+  async function checkSession() {
     try {
-      console.log('👤 Checking user session...')
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      const { data: { session }, error } = await supabase.auth.getSession()
       
-      if (sessionError) {
-        console.error('❌ Session error:', sessionError)
-        throw sessionError
-      }
+      if (error) throw error
       
-      const currentUser = session?.user ?? null
-      console.log('📊 Current user:', currentUser?.email || 'Not logged in')
-      setUser(currentUser)
-      
-      if (currentUser) {
-        // 🔥 BYPASS DATABASE - Crea profilo virtuale
-        createVirtualProfile(currentUser)
+      if (session?.user) {
+        console.log('✅ Sessione attiva:', session.user.email)
+        setUser(session.user)
+        await loadUserProfile(session.user.id)
+      } else {
+        console.log('❌ Nessuna sessione attiva')
       }
     } catch (error) {
-      console.error('❌ Errore check user:', error)
+      console.error('❌ Errore verifica sessione:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  // 🔥 NUOVA FUNZIONE: Crea profilo senza database
-  function createVirtualProfile(authUser) {
-    console.log('✨ Creazione profilo virtuale per:', authUser.email)
-    
-    // Estrai nome/cognome dall'email (se possibile)
-    const emailName = authUser.email.split('@')[0]
-    const isAdmin = authUser.email.includes('admin') || authUser.email.includes('melanie')
-    
-    const virtualProfile = {
-      id: authUser.id,
-      email: authUser.email,
-      nome: isAdmin ? 'Admin' : emailName,
-      cognome: isAdmin ? 'User' : '',
-      ruolo: isAdmin ? 'admin' : 'tecnico',
-      attivo: true,
-      _isVirtual: true, // Flag per sapere che è virtuale
-      created_at: authUser.created_at,
-      updated_at: new Date().toISOString()
+  // 🆕 CARICA PROFILO REALE DAL DATABASE
+  async function loadUserProfile(userId) {
+    try {
+      console.log('📊 Caricamento profilo utente:', userId)
+      
+      const { data, error } = await supabase
+        .from('utenti')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) {
+        // Se il profilo non esiste nel DB, potrebbe essere un utente appena creato
+        console.warn('⚠️ Profilo non trovato nel DB:', error.message)
+        
+        // Verifica se l'utente esiste in auth
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+        
+        if (!authError && authUser) {
+          // Crea profilo virtuale temporaneo (per retrocompatibilità)
+          const virtualProfile = {
+            id: authUser.id,
+            email: authUser.email,
+            nome: authUser.email.split('@')[0],
+            cognome: '',
+            ruolo: 'tecnico', // Default
+            attivo: true,
+            _isVirtual: true
+          }
+          console.log('⚠️ Usando profilo virtuale temporaneo')
+          setUserProfile(virtualProfile)
+        }
+        return
+      }
+
+      console.log('✅ Profilo caricato:', data)
+      setUserProfile(data)
+    } catch (error) {
+      console.error('❌ Errore caricamento profilo:', error)
     }
-    
-    console.log('✅ Profilo virtuale creato:', virtualProfile)
-    setUserProfile(virtualProfile)
   }
 
   async function refreshProfile() {
@@ -101,7 +113,7 @@ export function AuthProvider({ children }) {
     }
     
     console.log('🔄 Ricaricamento profilo...')
-    createVirtualProfile(user)
+    await loadUserProfile(user.id)
   }
 
   async function signIn(email, password) {
@@ -120,9 +132,9 @@ export function AuthProvider({ children }) {
       
       console.log('✅ Auth successful:', data.user.email)
       
-      // Crea profilo virtuale
+      // Carica profilo reale
       if (data.user) {
-        createVirtualProfile(data.user)
+        await loadUserProfile(data.user.id)
       }
       
       return { data, error: null }
@@ -139,31 +151,39 @@ export function AuthProvider({ children }) {
       // 1. Crea utente auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          data: {
+            nome: userData.nome,
+            cognome: userData.cognome
+          }
+        }
       })
 
       if (authError) throw authError
 
-      // 2. OPZIONALE: Prova a creare profilo su DB (ma non bloccare se fallisce)
+      // 2. Crea profilo nel DB
       if (authData.user) {
-        console.log('👤 Tentativo creazione profilo DB...')
+        console.log('👤 Creazione profilo DB...')
         
-        try {
-          await supabase
-            .from('utenti')
-            .insert({
-              id: authData.user.id,
-              email: email,
-              nome: userData.nome,
-              cognome: userData.cognome,
-              ruolo: userData.ruolo || 'tecnico',
-              telefono: userData.telefono || null,
-              attivo: true
-            })
-          console.log('✅ Profilo DB creato')
-        } catch (dbError) {
-          console.warn('⚠️ Errore creazione profilo DB (non bloccante):', dbError)
+        const { error: dbError } = await supabase
+          .from('utenti')
+          .insert({
+            id: authData.user.id,
+            email: email,
+            nome: userData.nome,
+            cognome: userData.cognome,
+            ruolo: userData.ruolo || 'tecnico',
+            telefono: userData.telefono || null,
+            attivo: true
+          })
+        
+        if (dbError) {
+          console.error('❌ Errore creazione profilo DB:', dbError)
           // Non blocchiamo la registrazione se il DB fallisce
+        } else {
+          console.log('✅ Profilo DB creato')
+          await loadUserProfile(authData.user.id)
         }
       }
 
@@ -214,8 +234,10 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // 🔒 HELPER PER PERMESSI
   const isAdmin = userProfile?.ruolo === 'admin'
   const isTecnico = userProfile?.ruolo === 'tecnico'
+  const isActive = userProfile?.attivo === true
 
   const value = {
     user,
@@ -228,7 +250,8 @@ export function AuthProvider({ children }) {
     updatePassword,
     refreshProfile,
     isAdmin,
-    isTecnico
+    isTecnico,
+    isActive
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

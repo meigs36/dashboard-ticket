@@ -9,7 +9,6 @@ export const metadata = {
   title: 'Odonto Service - Sistema Ticket',
   description: 'Sistema completo per assistenza tecnica odontoiatrica. Installabile come app nativa su tutti i dispositivi. Funziona anche offline.',
   manifest: "/manifest.json",
-  themeColor: "#1E90FF",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -31,12 +30,15 @@ export const metadata = {
   },
   keywords: ["odonto", "ticket", "assistenza", "odontoiatria", "service desk", "help desk"],
   authors: [{ name: "Odonto Service" }],
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
+}
+
+// ✅ Viewport export separato (richiesto da Next.js 14+)
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#1E90FF",
 }
 
 export default function RootLayout({ children }) {

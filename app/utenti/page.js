@@ -57,44 +57,48 @@ function UtentiPage() {
             nome: formData.nome,
             cognome: formData.cognome,
             ruolo: formData.ruolo,
-            telefono: formData.telefono,
-            updated_at: new Date().toISOString()
+            telefono: formData.telefono || null
           })
           .eq('id', editingUser.id)
 
         if (error) throw error
-        alert('Utente modificato con successo!')
+        alert('✅ Utente aggiornato!')
+        
       } else {
-        // Crea nuovo utente
-        // Prima crea l'utente in auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            data: {
-              nome: formData.nome,
-              cognome: formData.cognome
-            }
-          }
-        })
+        // Crea nuovo utente tramite API route
+        console.log('📤 Chiamata API creazione utente...')
+        
+        // Ottieni token corrente
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          throw new Error('Sessione scaduta, rieffettua il login')
+        }
 
-        if (authError) throw authError
-
-        // Poi crea il profilo utente
-        const { error: profileError } = await supabase
-          .from('utenti')
-          .insert({
-            auth_id: authData.user.id,
+        const response = await fetch('/api/admin/create-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
             email: formData.email,
+            password: formData.password,
             nome: formData.nome,
             cognome: formData.cognome,
             ruolo: formData.ruolo,
-            telefono: formData.telefono,
-            attivo: true
+            telefono: formData.telefono
           })
+        })
 
-        if (profileError) throw profileError
-        alert('Utente creato con successo!')
+        const result = await response.json()
+        
+        console.log('📥 Risposta API:', result)
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Errore creazione utente')
+        }
+
+        alert('✅ Utente creato con successo!')
       }
 
       // Reset form e ricarica
@@ -109,9 +113,10 @@ function UtentiPage() {
         password: ''
       })
       loadUtenti()
+
     } catch (error) {
-      console.error('Errore:', error)
-      alert(error.message || 'Errore durante il salvataggio')
+      console.error('❌ Errore:', error)
+      alert(`❌ Errore: ${error.message}`)
     } finally {
       setLoading(false)
     }
