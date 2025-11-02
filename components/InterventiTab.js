@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift, Edit2, Camera, Mic } from 'lucide-react'
+import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift, Edit2, Camera, Mic, X, ZoomIn } from 'lucide-react'
 import AggiungiInterventoModal from './AggiungiInterventoModal'
 import ModificaInterventoModal from './ModificaInterventoModal'
-import InterventoMediaCapture from './InterventoMediaCapture' // ⚡ NUOVO IMPORT
+import InterventoMediaCapture from './InterventoMediaCapture' // Per audio/foto upload
 
 export default function InterventiTab({ ticket, onUpdate }) {
   const [interventi, setInterventi] = useState([])
@@ -14,7 +14,12 @@ export default function InterventiTab({ ticket, onUpdate }) {
   const [showModal, setShowModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [interventoSelezionato, setInterventoSelezionato] = useState(null)
-  const [interventoMediaAperto, setInterventoMediaAperto] = useState(null) // ⚡ NUOVO STATE
+  const [interventoMediaAperto, setInterventoMediaAperto] = useState(null)
+  
+  // 📸 NUOVO: State per miniature foto inline + lightbox
+  const [allegatiPerIntervento, setAllegatiPerIntervento] = useState({})
+  const [lightboxImage, setLightboxImage] = useState(null)
+  
   const [totali, setTotali] = useState({
     oreEffettive: 0,
     oreAddebitate: 0,
@@ -64,6 +69,9 @@ export default function InterventiTab({ ticket, onUpdate }) {
       })) || []
       
       setInterventi(interventiArricchiti)
+      
+      // 📸 NUOVO: Carica miniature foto inline
+      await loadAllegatiMiniature(interventiArricchiti)
       
       // Calcola totali
       if (interventiArricchiti.length > 0) {
@@ -121,6 +129,51 @@ export default function InterventiTab({ ticket, onUpdate }) {
       alert('❌ Errore caricamento interventi: ' + error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 📸 NUOVO: Carica miniature foto inline per visualizzazione rapida
+  async function loadAllegatiMiniature(interventiList) {
+    try {
+      const interventoIds = interventiList.map(int => int.id)
+      
+      if (interventoIds.length === 0) {
+        setAllegatiPerIntervento({})
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('interventi_allegati')
+        .select('*')
+        .in('intervento_id', interventoIds)
+        .eq('tipo', 'foto')
+        .order('caricato_il', { ascending: false })
+
+      if (error) throw error
+
+      // Raggruppa allegati per intervento_id e genera URL pubblici
+      const allegatiMap = {}
+      
+      for (const allegato of data || []) {
+        if (!allegatiMap[allegato.intervento_id]) {
+          allegatiMap[allegato.intervento_id] = []
+        }
+        
+        // Genera URL pubblico per l'immagine
+        const { data: urlData } = await supabase.storage
+          .from('interventi-media')
+          .createSignedUrl(allegato.storage_path, 3600) // URL valido per 1 ora
+
+        allegatiMap[allegato.intervento_id].push({
+          ...allegato,
+          url: urlData?.signedUrl || null
+        })
+      }
+
+      setAllegatiPerIntervento(allegatiMap)
+      console.log('📸 Miniature caricate:', allegatiMap)
+    } catch (error) {
+      console.error('❌ Errore caricamento miniature:', error)
     }
   }
 
@@ -202,11 +255,14 @@ export default function InterventiTab({ ticket, onUpdate }) {
                 : `(${formatDurata(intervento.durata_effettiva)} → ${formatDurata(intervento.durata_addebitata)})`
               
               return (
-                <div key={intervento.id} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                  <div className="flex items-start gap-4">
+                <div
+                  key={intervento.id}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start gap-3">
                     <div className="flex-1">
-                      {/* Data e ora */}
-                      <div className="flex flex-wrap items-center gap-4 mb-3">
+                      {/* Data e Orario */}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
                         <div className="flex items-center gap-2 text-gray-900 dark:text-white font-semibold">
                           <Calendar size={16} />
                           <span>{formatDate(intervento.data_intervento)}</span>
@@ -258,7 +314,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         </div>
                       ) : (
                         <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">
-                          🔌 Assistenza remota
+                          📌 Assistenza remota
                         </div>
                       )}
 
@@ -269,29 +325,69 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         </p>
                       )}
 
-                      {/* ⚡ NUOVO: Pulsante Foto/Audio */}
+                      {/* 📸 NUOVO: Miniature Foto INLINE */}
+                      {allegatiPerIntervento[intervento.id]?.length > 0 && (
+                        <div className="mt-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Camera size={14} className="text-blue-600 dark:text-blue-400" />
+                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                              Foto ({allegatiPerIntervento[intervento.id].length})
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                            {allegatiPerIntervento[intervento.id].map((foto) => (
+                              <div 
+                                key={foto.id} 
+                                className="relative aspect-square group cursor-pointer"
+                                onClick={() => setLightboxImage({
+                                  url: foto.url,
+                                  nome: foto.nome_file
+                                })}
+                              >
+                                <img
+                                  src={foto.url}
+                                  alt={foto.nome_file}
+                                  className="w-full h-full object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 transition-colors"
+                                />
+                                {/* Overlay con icona zoom - FIX: pointer-events-none sull'overlay, auto sull'icona */}
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 rounded-lg flex items-center justify-center transition-all pointer-events-none">
+                                  <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 drop-shadow-lg pointer-events-auto" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Pulsante Gestione Audio/Foto Completa */}
                       <div className="mt-3">
                         <button
                           onClick={() => setInterventoMediaAperto(
                             interventoMediaAperto === intervento.id ? null : intervento.id
                           )}
-                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
                         >
                           <Camera size={14} />
                           <Mic size={14} />
                           <span>
                             {interventoMediaAperto === intervento.id 
-                              ? 'Nascondi foto e audio' 
-                              : 'Mostra foto e audio'
+                              ? 'Nascondi gestione media' 
+                              : 'Gestisci foto e audio'
                             }
                           </span>
                         </button>
                       </div>
 
-                      {/* ⚡ NUOVO: Sezione Foto/Audio Espandibile */}
+                      {/* Sezione Gestione Media Completa (Upload, Audio, etc) */}
                       {interventoMediaAperto === intervento.id && (
                         <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-                          <InterventoMediaCapture interventoId={intervento.id} />
+                          <InterventoMediaCapture 
+                            interventoId={intervento.id}
+                            onMediaUploaded={() => {
+                              // Ricarica miniature quando viene caricato nuovo media
+                              loadInterventi()
+                            }}
+                          />
                         </div>
                       )}
                     </div>
@@ -433,6 +529,47 @@ export default function InterventiTab({ ticket, onUpdate }) {
             onUpdate()
           }}
         />
+      )}
+
+      {/* 🔍 LIGHTBOX FOTO - Versione Ottimizzata */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 bg-black/95 z-[9999] flex items-center justify-center p-4"
+          onClick={() => setLightboxImage(null)}
+          style={{ touchAction: 'none' }}
+        >
+          {/* Pulsante Chiudi */}
+          <button
+            className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-sm transition-all z-10"
+            onClick={(e) => {
+              e.stopPropagation()
+              setLightboxImage(null)
+            }}
+            aria-label="Chiudi"
+          >
+            <X size={24} />
+          </button>
+
+          {/* Nome File */}
+          {lightboxImage.nome && (
+            <div className="absolute top-4 left-4 px-4 py-2 bg-black/50 text-white text-sm rounded-lg backdrop-blur-sm max-w-md truncate">
+              {lightboxImage.nome}
+            </div>
+          )}
+
+          {/* Immagine */}
+          <img
+            src={lightboxImage.url}
+            alt={lightboxImage.nome || 'Foto intervento'}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* Hint Mobile */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/50 text-white text-xs rounded-lg backdrop-blur-sm md:hidden">
+            Tocca fuori dall'immagine per chiudere
+          </div>
+        </div>
       )}
     </div>
   )
