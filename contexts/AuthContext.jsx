@@ -32,9 +32,18 @@ export function AuthProvider({ children }) {
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user)
           await loadUserProfile(session.user.id)
-        } else if (event === 'SIGNED_OUT') {
+        } 
+        else if (event === 'SIGNED_OUT') {
           setUser(null)
           setUserProfile(null)
+        }
+        // ✅ Gestisci refresh automatico del token
+        else if (event === 'TOKEN_REFRESHED') {
+          console.log('✅ Token refreshed successfully')
+          if (session?.user) {
+            setUser(session.user)
+            // Non ricaricare profilo ogni volta, solo se serve
+          }
         }
       }
     )
@@ -42,13 +51,30 @@ export function AuthProvider({ children }) {
     return () => {
       authListener?.subscription?.unsubscribe()
     }
-  }, [])
+  }, []) // ✅ FIX: Array vuoto - esegue solo una volta!
 
   async function checkSession() {
     try {
       const { data: { session }, error } = await supabase.auth.getSession()
       
-      if (error) throw error
+      // ✅ Gestisci errore refresh_token_not_found
+      if (error) {
+        console.error('❌ Errore verifica sessione:', error)
+        
+        // Se errore di refresh token, pulisci tutto e vai a login
+        if (error.message?.includes('refresh_token_not_found') || 
+            error.message?.includes('Invalid Refresh Token')) {
+          console.error('❌ Refresh token not found, clearing session')
+          await supabase.auth.signOut()
+          setUser(null)
+          setUserProfile(null)
+          setLoading(false)
+          router.push('/login')
+          return
+        }
+        
+        throw error
+      }
       
       if (session?.user) {
         console.log('✅ Sessione attiva:', session.user.email)
@@ -234,6 +260,31 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // ✅ Funzione per forzare refresh sessione (debug)
+  async function refreshSession() {
+    try {
+      const { data, error } = await supabase.auth.refreshSession()
+      
+      if (error) {
+        console.error('❌ Error refreshing session:', error)
+        // Se fallisce, logout
+        await signOut()
+        return { session: null, error }
+      }
+
+      console.log('✅ Session refreshed manually')
+      if (data.session?.user) {
+        setUser(data.session.user)
+        await loadUserProfile(data.session.user.id)
+      }
+      return { session: data.session, error: null }
+    } catch (error) {
+      console.error('❌ Error refreshing session:', error)
+      await signOut()
+      return { session: null, error }
+    }
+  }
+
   // 🔒 HELPER PER PERMESSI
   const isAdmin = userProfile?.ruolo === 'admin'
   const isTecnico = userProfile?.ruolo === 'tecnico'
@@ -249,6 +300,7 @@ export function AuthProvider({ children }) {
     resetPassword,
     updatePassword,
     refreshProfile,
+    refreshSession,
     isAdmin,
     isTecnico,
     isActive
