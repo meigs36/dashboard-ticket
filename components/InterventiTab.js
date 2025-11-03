@@ -7,6 +7,7 @@ import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift, Edit2
 import AggiungiInterventoModal from './AggiungiInterventoModal'
 import ModificaInterventoModal from './ModificaInterventoModal'
 import InterventoMediaCapture from './InterventoMediaCapture' // Per audio/foto upload
+import InterventiAllegatiInline from './InterventiAllegatiInline' // ✅ Visualizza audio e foto inline
 
 export default function InterventiTab({ ticket, onUpdate }) {
   const [interventi, setInterventi] = useState([])
@@ -318,46 +319,42 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         </div>
                       )}
 
-                      {/* Descrizione */}
+                      {/* Descrizione - Filtrata senza trascrizioni */}
                       {intervento.descrizione_intervento && (
-                        <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded p-2">
-                          {intervento.descrizione_intervento}
-                        </p>
-                      )}
+  <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded p-2 whitespace-pre-wrap">
+    {(() => {
+      const lines = intervento.descrizione_intervento.split('\n')
+      const filteredLines = lines.filter(line => {
+        const trimmed = line.trim()
+        
+        // Rimuovi linee vuote
+        if (!trimmed) return false
+        
+        // Rimuovi linee con timestamp (formato: HH:MM o HH:MM - DD/MM/YYYY)
+        if (trimmed.match(/\d{2}:\d{2}/)) return false
+        
+        // Rimuovi linee con solo caratteri decorativi (─, -, =, spazi)
+        if (trimmed.match(/^[─\-=\s|]+$/)) return false
+        
+        // Rimuovi linee che terminano con "II" (separatori)
+        if (trimmed.match(/II\s*$/)) return false
+        
+        // Rimuovi linee che contengono "Trascrizione:" o simili
+        if (trimmed.match(/^Trascrizione:/i)) return false
+        
+        return true
+      })
+      
+      return filteredLines.join('\n').trim()
+    })()}
+  </p>
+)}
 
-                      {/* 📸 NUOVO: Miniature Foto INLINE */}
-                      {allegatiPerIntervento[intervento.id]?.length > 0 && (
-                        <div className="mt-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Camera size={14} className="text-blue-600 dark:text-blue-400" />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-                              Foto ({allegatiPerIntervento[intervento.id].length})
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-                            {allegatiPerIntervento[intervento.id].map((foto) => (
-                              <div 
-                                key={foto.id} 
-                                className="relative aspect-square group cursor-pointer"
-                                onClick={() => setLightboxImage({
-                                  url: foto.url,
-                                  nome: foto.nome_file
-                                })}
-                              >
-                                <img
-                                  src={foto.url}
-                                  alt={foto.nome_file}
-                                  className="w-full h-full object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 transition-colors"
-                                />
-                                {/* Overlay con icona zoom - FIX: pointer-events-none sull'overlay, auto sull'icona */}
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 rounded-lg flex items-center justify-center transition-all pointer-events-none">
-                                  <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 drop-shadow-lg pointer-events-auto" />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      {/* ✅ NUOVO: Audio e Foto sempre visibili inline */}
+                      <InterventiAllegatiInline
+                        interventoId={intervento.id}
+                        onDelete={loadInterventi}
+                      />
 
                       {/* Pulsante Gestione Audio/Foto Completa */}
                       <div className="mt-3">
