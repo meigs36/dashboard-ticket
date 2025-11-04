@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift, Edit2, Camera, Mic, X, ZoomIn } from 'lucide-react'
+import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift, Edit2, Camera, Mic } from 'lucide-react'
 import AggiungiInterventoModal from './AggiungiInterventoModal'
 import ModificaInterventoModal from './ModificaInterventoModal'
 import InterventoMediaCapture from './InterventoMediaCapture' // Per audio/foto upload
 import InterventiAllegatiInline from './InterventiAllegatiInline' // ✅ Visualizza audio e foto inline
+import TrascrizioniSalvate from './TrascrizioniSalvate' // ✅ Visualizza trascrizioni permanenti salvate
 
 export default function InterventiTab({ ticket, onUpdate }) {
   const [interventi, setInterventi] = useState([])
@@ -17,9 +18,9 @@ export default function InterventiTab({ ticket, onUpdate }) {
   const [interventoSelezionato, setInterventoSelezionato] = useState(null)
   const [interventoMediaAperto, setInterventoMediaAperto] = useState(null)
   
-  // 📸 NUOVO: State per miniature foto inline + lightbox
-  const [allegatiPerIntervento, setAllegatiPerIntervento] = useState({})
-  const [lightboxImage, setLightboxImage] = useState(null)
+  // ❌ RIMOSSO: State per allegati e lightbox (ora gestiti da InterventiAllegatiInline)
+  // const [allegatiPerIntervento, setAllegatiPerIntervento] = useState({})
+  // const [lightboxImage, setLightboxImage] = useState(null)
   
   const [totali, setTotali] = useState({
     oreEffettive: 0,
@@ -71,8 +72,8 @@ export default function InterventiTab({ ticket, onUpdate }) {
       
       setInterventi(interventiArricchiti)
       
-      // 📸 NUOVO: Carica miniature foto inline
-      await loadAllegatiMiniature(interventiArricchiti)
+      // ❌ RIMOSSO: Caricamento miniature (ora gestito da InterventiAllegatiInline)
+      // await loadAllegatiMiniature(interventiArricchiti)
       
       // Calcola totali
       if (interventiArricchiti.length > 0) {
@@ -133,50 +134,12 @@ export default function InterventiTab({ ticket, onUpdate }) {
     }
   }
 
-  // 📸 NUOVO: Carica miniature foto inline per visualizzazione rapida
+  // ❌ RIMOSSO: Funzione loadAllegatiMiniature (ora gestita da InterventiAllegatiInline)
+  /*
   async function loadAllegatiMiniature(interventiList) {
-    try {
-      const interventoIds = interventiList.map(int => int.id)
-      
-      if (interventoIds.length === 0) {
-        setAllegatiPerIntervento({})
-        return
-      }
-
-      const { data, error } = await supabase
-        .from('interventi_allegati')
-        .select('*')
-        .in('intervento_id', interventoIds)
-        .eq('tipo', 'foto')
-        .order('caricato_il', { ascending: false })
-
-      if (error) throw error
-
-      // Raggruppa allegati per intervento_id e genera URL pubblici
-      const allegatiMap = {}
-      
-      for (const allegato of data || []) {
-        if (!allegatiMap[allegato.intervento_id]) {
-          allegatiMap[allegato.intervento_id] = []
-        }
-        
-        // Genera URL pubblico per l'immagine
-        const { data: urlData } = await supabase.storage
-          .from('interventi-media')
-          .createSignedUrl(allegato.storage_path, 3600) // URL valido per 1 ora
-
-        allegatiMap[allegato.intervento_id].push({
-          ...allegato,
-          url: urlData?.signedUrl || null
-        })
-      }
-
-      setAllegatiPerIntervento(allegatiMap)
-      console.log('📸 Miniature caricate:', allegatiMap)
-    } catch (error) {
-      console.error('❌ Errore caricamento miniature:', error)
-    }
+    // ... codice rimosso ...
   }
+  */
 
   async function handleEliminaIntervento(interventoId) {
     if (!confirm('Sei sicuro di voler eliminare questo intervento?\n\nLe ore verranno rimborsate nel contratto.')) {
@@ -217,140 +180,131 @@ export default function InterventiTab({ ticket, onUpdate }) {
       {/* Header con pulsante Aggiungi */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          📋 Interventi su questo ticket
+          Interventi ({interventi.length})
         </h3>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
         >
           <Plus size={18} />
-          Aggiungi intervento
+          <span>Nuovo Intervento</span>
         </button>
       </div>
 
-      {/* Lista Interventi */}
-      {loading ? (
+      {/* Loading */}
+      {loading && (
         <div className="text-center py-8">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-blue-600"></div>
-          <p className="mt-2 text-gray-500">Caricamento interventi...</p>
+          <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Caricamento interventi...</p>
         </div>
-      ) : interventi.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-          <Briefcase className="mx-auto text-gray-400" size={48} />
-          <p className="mt-4 text-gray-500 dark:text-gray-400">
-            Nessun intervento registrato per questo ticket
+      )}
+
+      {/* Nessun intervento */}
+      {!loading && interventi.length === 0 && (
+        <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+          <Briefcase size={48} className="mx-auto text-gray-400 dark:text-gray-600 mb-4" />
+          <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            Nessun intervento registrato
+          </h4>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Inizia aggiungendo il primo intervento per questo ticket
           </p>
           <button
             onClick={() => setShowModal(true)}
-            className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
           >
-            Aggiungi il primo intervento →
+            <Plus size={18} />
+            <span>Aggiungi Intervento</span>
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Lista Interventi */}
+      {!loading && interventi.length > 0 && (
         <>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {interventi.map((intervento) => {
-              const durataText = intervento.durata_effettiva === intervento.durata_addebitata
-                ? `(${formatDurata(intervento.durata_effettiva)})`
-                : `(${formatDurata(intervento.durata_effettiva)} → ${formatDurata(intervento.durata_addebitata)})`
-              
+              const durataEffettiva = parseFloat(intervento.durata_effettiva || 0)
+              const durataAddebitata = parseFloat(intervento.durata_addebitata || 0)
+              const oreScalate = parseFloat(intervento.ore_scalate || 0)
+              const oreDaFatturare = durataAddebitata - oreScalate
+
               return (
                 <div
                   key={intervento.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex justify-between">
                     <div className="flex-1">
-                      {/* Data e Orario */}
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                        <div className="flex items-center gap-2 text-gray-900 dark:text-white font-semibold">
+                      {/* Header Intervento */}
+                      <div className="flex flex-wrap items-center gap-3 mb-3">
+                        {/* Data */}
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
                           <Calendar size={16} />
-                          <span>{formatDate(intervento.data_intervento)}</span>
+                          <span className="font-medium">{formatDate(intervento.data_intervento)}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+
+                        {/* Orario */}
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
                           <Clock size={16} />
                           <span>
-                            {intervento.ora_inizio} - {intervento.ora_fine} {durataText}
+                            {intervento.ora_inizio} - {intervento.ora_fine}
+                            <span className="ml-1 text-xs">({formatDurata(durataEffettiva)})</span>
                           </span>
                         </div>
-                      </div>
 
-                      {/* Tecnico */}
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
-                        <UserIcon size={14} />
-                        <span>{intervento.tecnico_nome}</span>
-                      </div>
+                        {/* Tecnico */}
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                          <UserIcon size={16} />
+                          <span>{intervento.tecnico_nome}</span>
+                        </div>
 
-                      {/* Tipo Attività */}
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                        📋 {intervento.tipo_attivita || 'N/A'}
-                      </div>
-
-                      {/* Contratto, Cortesia o Ore da Fatturare */}
-                      {intervento.is_cortesia ? (
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded text-xs font-semibold">
+                        {/* Badge Tipo */}
+                        {intervento.is_loco && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                            IN LOCO
+                          </span>
+                        )}
+                        
+                        {intervento.is_remoto && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
+                            REMOTO
+                          </span>
+                        )}
+                        
+                        {intervento.is_aggiornamento && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
+                            AGGIORNAMENTO
+                          </span>
+                        )}
+                        
+                        {intervento.is_cortesia && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded flex items-center gap-1">
                             <Gift size={12} />
                             CORTESIA
                           </span>
-                          {intervento.motivo_cortesia && (
-                            <span className="text-xs text-gray-500">
-                              {intervento.motivo_cortesia}
-                            </span>
-                          )}
-                        </div>
-                      ) : (intervento.modalita_intervento?.toLowerCase() === 'in loco' || 
-                           intervento.modalita_intervento?.toLowerCase() === 'in_loco' ||
-                           intervento.modalita_intervento?.toLowerCase() === 'loco') ? (
-                        <div className="text-sm text-orange-600 dark:text-orange-400 font-medium">
-                          💰 Ore da fatturare: {formatDurata(intervento.durata_addebitata || intervento.durata_effettiva || 0)}
-                        </div>
-                      ) : intervento.contratto_id ? (
-                        <div className="text-sm text-blue-600 dark:text-blue-400">
-                          💼 {intervento.nome_contratto || 'Contratto'} (#{intervento.num_contratto || 'N/A'}) 
-                          <span className="ml-2 font-semibold">
-                            {formatDurata(intervento.ore_scalate || 0)} scalate
+                        )}
+
+                        {/* Badge Contratto */}
+                        {intervento.num_contratto && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">
+                            {intervento.num_contratto}
                           </span>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">
-                          📌 Assistenza remota
-                        </div>
-                      )}
+                        )}
+                      </div>
 
-                      {/* Descrizione - Filtrata senza trascrizioni */}
-                      {intervento.descrizione_intervento && (
-  <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded p-2 whitespace-pre-wrap">
-    {(() => {
-      const lines = intervento.descrizione_intervento.split('\n')
-      const filteredLines = lines.filter(line => {
-        const trimmed = line.trim()
-        
-        // Rimuovi linee vuote
-        if (!trimmed) return false
-        
-        // Rimuovi linee con timestamp (formato: HH:MM o HH:MM - DD/MM/YYYY)
-        if (trimmed.match(/\d{2}:\d{2}/)) return false
-        
-        // Rimuovi linee con solo caratteri decorativi (─, -, =, spazi)
-        if (trimmed.match(/^[─\-=\s|]+$/)) return false
-        
-        // Rimuovi linee che terminano con "II" (separatori)
-        if (trimmed.match(/II\s*$/)) return false
-        
-        // Rimuovi linee che contengono "Trascrizione:" o simili
-        if (trimmed.match(/^Trascrizione:/i)) return false
-        
-        return true
-      })
-      
-      return filteredLines.join('\n').trim()
-    })()}
-  </p>
-)}
+                      {/* Descrizione */}
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 whitespace-pre-wrap">
+                        {intervento.descrizione_intervento || <span className="text-gray-400 dark:text-gray-600 italic">Nessuna descrizione</span>}
+                      </p>
 
-                      {/* ✅ NUOVO: Audio e Foto sempre visibili inline */}
+                      {/* ✅ COMPONENTE TRASCRIZIONI SALVATE (Trascrizioni permanenti) - PRIMA */}
+                      <TrascrizioniSalvate
+                        interventoId={intervento.id}
+                        onUpdate={loadInterventi}
+                      />
+
+                      {/* ✅ COMPONENTE ALLEGATI INLINE (Audio e Foto sempre visibili) - DOPO */}
                       <InterventiAllegatiInline
                         interventoId={intervento.id}
                         onDelete={loadInterventi}
@@ -381,12 +335,46 @@ export default function InterventiTab({ ticket, onUpdate }) {
                           <InterventoMediaCapture 
                             interventoId={intervento.id}
                             onMediaUploaded={() => {
-                              // Ricarica miniature quando viene caricato nuovo media
+                              // Ricarica quando viene caricato nuovo media
                               loadInterventi()
                             }}
                           />
                         </div>
                       )}
+
+                      {/* Info Fatturazione */}
+                      <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-500">Addebitate:</span>
+                          <span className="ml-1 font-semibold text-blue-600 dark:text-blue-400">
+                            {formatDurata(durataAddebitata)}
+                          </span>
+                        </div>
+                        
+                        {oreScalate > 0 && (
+                          <div>
+                            <span className="text-gray-500 dark:text-gray-500">Scalate:</span>
+                            <span className="ml-1 font-semibold text-purple-600 dark:text-purple-400">
+                              {formatDurata(oreScalate)}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {!intervento.is_cortesia && (
+                          <div>
+                            <span className="text-gray-500 dark:text-gray-500">
+                              {intervento.fatturato ? 'Fatturate:' : 'Da fatturare:'}
+                            </span>
+                            <span className={`ml-1 font-semibold ${
+                              intervento.fatturato 
+                                ? 'text-green-600 dark:text-green-400' 
+                                : 'text-orange-600 dark:text-orange-400'
+                            }`}>
+                              {formatDurata(oreDaFatturare > 0 ? oreDaFatturare : 0)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Pulsanti Azioni */}
@@ -528,46 +516,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
         />
       )}
 
-      {/* 🔍 LIGHTBOX FOTO - Versione Ottimizzata */}
-      {lightboxImage && (
-        <div 
-          className="fixed inset-0 bg-black/95 z-[9999] flex items-center justify-center p-4"
-          onClick={() => setLightboxImage(null)}
-          style={{ touchAction: 'none' }}
-        >
-          {/* Pulsante Chiudi */}
-          <button
-            className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-sm transition-all z-10"
-            onClick={(e) => {
-              e.stopPropagation()
-              setLightboxImage(null)
-            }}
-            aria-label="Chiudi"
-          >
-            <X size={24} />
-          </button>
-
-          {/* Nome File */}
-          {lightboxImage.nome && (
-            <div className="absolute top-4 left-4 px-4 py-2 bg-black/50 text-white text-sm rounded-lg backdrop-blur-sm max-w-md truncate">
-              {lightboxImage.nome}
-            </div>
-          )}
-
-          {/* Immagine */}
-          <img
-            src={lightboxImage.url}
-            alt={lightboxImage.nome || 'Foto intervento'}
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-
-          {/* Hint Mobile */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/50 text-white text-xs rounded-lg backdrop-blur-sm md:hidden">
-            Tocca fuori dall'immagine per chiudere
-          </div>
-        </div>
-      )}
+      {/* ❌ RIMOSSO: Lightbox separato (ora gestito da InterventiAllegatiInline) */}
     </div>
   )
 }

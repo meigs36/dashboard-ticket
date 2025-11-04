@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
+import TicketActionsModal from '@/components/TicketActionsModal'
 
 export default function DashboardAdmin() {
   const [stats, setStats] = useState({
@@ -20,6 +21,8 @@ export default function DashboardAdmin() {
 
   const [miniChart, setMiniChart] = useState([])
   const [recentTickets, setRecentTickets] = useState([])
+  const [ticketSelezionato, setTicketSelezionato] = useState(null)
+  const [mostraModalAzioni, setMostraModalAzioni] = useState(false)
 
   useEffect(() => {
     loadStats()
@@ -125,6 +128,22 @@ export default function DashboardAdmin() {
       chiuso: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
     }
     return badges[stato] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+  }
+
+  function handleAzioniClick(ticket, e) {
+    if (e) e.stopPropagation()
+    setTicketSelezionato(ticket)
+    setMostraModalAzioni(true)
+  }
+
+  function handleModalClose() {
+    setMostraModalAzioni(false)
+    setTicketSelezionato(null)
+  }
+
+  function handleTicketUpdate() {
+    loadRecentTickets()
+    loadStats()
   }
 
   if (stats.loading) {
@@ -298,12 +317,12 @@ export default function DashboardAdmin() {
             ) : (
               <div className="space-y-3">
                 {recentTickets.map((ticket) => (
-                  <Link 
-                    key={ticket.id} 
-                    href={`/ticket?highlight=${ticket.id}`}
-                    className="block"
+                  <div
+                    key={ticket.id}
+                    onClick={() => handleAzioniClick(ticket, null)}
+                    className="block cursor-pointer"
                   >
-                    <div className="group p-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all cursor-pointer">
+                    <div className="group p-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
@@ -330,13 +349,22 @@ export default function DashboardAdmin() {
                         />
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal Azioni Ticket */}
+      {mostraModalAzioni && ticketSelezionato && (
+        <TicketActionsModal
+          ticket={ticketSelezionato}
+          onClose={handleModalClose}
+          onUpdate={handleTicketUpdate}
+        />
+      )}
     </div>
   )
 }

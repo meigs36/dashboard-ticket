@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { ArrowLeft, Clock, CheckCircle, AlertCircle, Search, Filter, X, User, Mail, Phone, Calendar, FileText, TrendingUp, AlertTriangle, Settings } from 'lucide-react'
 import Link from 'next/link'
 import TicketActionsModal from '@/components/TicketActionsModal'
+import TicketKPIs from '@/components/TicketKPIs'
 
 export default function TicketPage() {
   const [tickets, setTickets] = useState([])
@@ -19,6 +20,9 @@ export default function TicketPage() {
   const [filtroAgente, setFiltroAgente] = useState('tutti')
   const [mostraFiltri, setMostraFiltri] = useState(false)
   
+  // ⚡ NUOVO: Lista tecnici
+  const [tecniciList, setTecniciList] = useState([])
+  
   // Statistiche
   const [stats, setStats] = useState({
     totali: 0,
@@ -31,6 +35,7 @@ export default function TicketPage() {
 
   useEffect(() => {
     loadTickets()
+    loadTecnici()  // ⚡ NUOVO: Carica tecnici all'avvio
   }, [])
 
   useEffect(() => {
@@ -67,6 +72,26 @@ export default function TicketPage() {
       console.error('Errore caricamento ticket:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ⚡ NUOVA FUNZIONE: Carica lista tecnici dalla tabella utenti
+  async function loadTecnici() {
+    try {
+      const { data, error } = await supabase
+        .from('utenti')
+        .select('id, nome, cognome, email, telefono')
+        .eq('ruolo', 'tecnico')
+        .eq('attivo', true)
+        .order('nome')
+
+      if (error) throw error
+      
+      console.log('✅ Tecnici caricati:', data)  // Debug
+      setTecniciList(data || [])
+    } catch (error) {
+      console.error('Errore caricamento tecnici:', error)
+      setTecniciList([])
     }
   }
 
@@ -112,10 +137,24 @@ export default function TicketPage() {
       ticket.clienti?.ragione_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.descrizione?.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchStato = filtroStato === 'tutti' || ticket.stato === filtroStato
+    const matchStato = filtroStato === 'tutti' || 
+      (filtroStato === 'in_lavorazione' 
+        ? (ticket.stato === 'in_lavorazione' || ticket.stato === 'assegnato')
+        : (filtroStato === 'risolto'
+          ? (ticket.stato === 'risolto' || ticket.stato === 'chiuso')
+          : ticket.stato === filtroStato
+        )
+      )
+    
     const matchPriorita = filtroPriorita === 'tutti' || ticket.priorita === filtroPriorita
-    const matchAgente = filtroAgente === 'tutti' || 
-      (ticket.id_tecnico_assegnato && ticket.id_tecnico_assegnato.toString() === filtroAgente)
+    
+    // ⚡ MODIFICATO: Gestisce anche "non_assegnato"
+    const matchAgente = 
+      filtroAgente === 'tutti' || 
+      (filtroAgente === 'non_assegnato' 
+        ? !ticket.id_tecnico_assegnato
+        : (ticket.id_tecnico_assegnato && ticket.id_tecnico_assegnato.toString() === filtroAgente)
+      )
     
     return matchRicerca && matchStato && matchPriorita && matchAgente
   })
@@ -171,10 +210,6 @@ export default function TicketPage() {
     return 'Appena aperto'
   }
 
-  const agentiUnici = [...new Set(tickets
-    .filter(t => t.id_tecnico_assegnato)
-    .map(t => t.id_tecnico_assegnato))]
-
   function handleAzioniClick(ticket, e) {
     if (e) e.stopPropagation()
     setTicketSelezionato(ticket)
@@ -227,51 +262,15 @@ export default function TicketPage() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <AlertCircle className="text-blue-600" size={24} />
-              <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.aperti}</span>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Aperti</p>
-          </div>
+        <TicketKPIs 
+          stats={stats}
+          filtroStato={filtroStato}
+          setFiltroStato={setFiltroStato}
+        />
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <Clock className="text-amber-600" size={24} />
-              <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.inLavorazione}</span>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">In Lavorazione</p>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <CheckCircle className="text-green-600" size={24} />
-              <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.risolti}</span>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Risolti</p>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <AlertTriangle className="text-red-600" size={24} />
-              <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.critici}</span>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Critici</p>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <TrendingUp className="text-purple-600" size={24} />
-              <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.tempoMedio}</span>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Tempo Medio</p>
-          </div>
-        </div>
-
-        {/* Search & Filter Bar */}
+        {/* Search and Filters */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 min-w-[300px] relative">
               <input
                 type="text"
@@ -338,16 +337,27 @@ export default function TicketPage() {
                   </select>
                 </div>
 
+                {/* ⚡ DROPDOWN TECNICO CORRETTO */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Agente</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Tecnico Assegnato
+                  </label>
                   <select 
                     value={filtroAgente}
                     onChange={(e) => setFiltroAgente(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="tutti">Tutti gli agenti</option>
-                    {agentiUnici.map(agente => (
-                      <option key={agente} value={agente}>Agente #{agente}</option>
+                    <option value="tutti">🔍 Tutti i tecnici</option>
+                    <option value="non_assegnato">👤 Non assegnati</option>
+                    
+                    {/* ⚡ USA tecniciList invece di agentiUnici */}
+                    {tecniciList.map((tecnico) => (
+                      <option key={tecnico.id} value={tecnico.id}>
+                        {tecnico.nome && tecnico.cognome 
+                          ? `${tecnico.nome} ${tecnico.cognome}`
+                          : tecnico.email
+                        }
+                      </option>
                     ))}
                   </select>
                 </div>
