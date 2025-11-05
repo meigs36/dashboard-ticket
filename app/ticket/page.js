@@ -99,11 +99,10 @@ export default function TicketPage() {
   function calcolaStats() {
     const aperti = tickets.filter(t => t.stato === 'aperto').length
     
-    // ✅ FIX 1: In Lavorazione include anche priorità "alta"
+    // ✅ FIX 1: In Lavorazione include bassa/media/alta ma ESCLUDE critica
     const inLavorazione = tickets.filter(t => 
-      t.stato === 'in_lavorazione' || 
-      t.stato === 'assegnato' || 
-      t.priorita === 'alta'
+      (t.stato === 'in_lavorazione' || t.stato === 'assegnato') &&
+      t.priorita !== 'critica'
     ).length
     
     const risolti = tickets.filter(t => t.stato === 'risolto' || t.stato === 'chiuso').length
@@ -151,10 +150,10 @@ export default function TicketPage() {
       ticket.clienti?.ragione_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.descrizione?.toLowerCase().includes(searchTerm.toLowerCase())
     
-    // ✅ FIX 3: matchStato include priorità "alta" nel filtro "in_lavorazione"
+    // ✅ FIX 3: matchStato include bassa/media/alta ma ESCLUDE critica
     const matchStato = filtroStato === 'tutti' || 
       (filtroStato === 'in_lavorazione' 
-        ? (ticket.stato === 'in_lavorazione' || ticket.stato === 'assegnato' || ticket.priorita === 'alta')
+        ? ((ticket.stato === 'in_lavorazione' || ticket.stato === 'assegnato') && ticket.priorita !== 'critica')
         : (filtroStato === 'risolto'
           ? (ticket.stato === 'risolto' || ticket.stato === 'chiuso')
           : ticket.stato === filtroStato
