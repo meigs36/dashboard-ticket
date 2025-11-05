@@ -1,29 +1,22 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Image, Mic, Trash2, X, ZoomIn, FileText, Edit3, Save, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { Image, Mic, Trash2, X, ZoomIn, ChevronDown, ChevronUp } from 'lucide-react'
 
 /**
- * ✅ InterventiAllegatiInline - Con Trascrizione Editabile
+ * ✅ InterventiAllegatiInline - VERSIONE SEMPLIFICATA
  * 
  * Features:
- * - 🎤 Audio player sempre visibili (SOPRA)
- * - 📝 Trascrizione EDITABILE (mantieni anche senza audio)
- * - 📸 Miniature foto cliccabili con lightbox (SOTTO)
- * - 🗑️ Eliminazione intelligente (chiede se mantenere trascrizione)
- * - 💾 Auto-save trascrizione nell'intervento
+ * - 🎤 Audio player sempre visibili (SENZA trascrizione inline)
+ * - 📸 Miniature foto cliccabili con lightbox
+ * - 🗑️ Eliminazione con conferma
  * - 🎨 Lightbox con sfondo verdino
- * - ✨ FIX ALLINEAMENTO MOBILE PERFETTO
+ * 
+ * NOTA: Le trascrizioni sono mostrate SOLO nel componente TrascrizioniSalvate
  */
 export default function InterventiAllegatiInline({ interventoId, onDelete }) {
   const [allegati, setAllegati] = useState([])
   const [lightboxImage, setLightboxImage] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  
-  // 📝 State per editing trascrizione
-  const [editingAudioId, setEditingAudioId] = useState(null)
-  const [editedText, setEditedText] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
-  const [showCopySuccess, setShowCopySuccess] = useState(null)
   
   // 🔽 State per espansione sezioni (COLLASSATE di default)
   const [isAudioExpanded, setIsAudioExpanded] = useState(false)
@@ -74,26 +67,10 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
     }
   }
 
-  // 🗑️ Eliminazione intelligente con salvataggio trascrizione
-  const handleDelete = async (allegatoId, tipo, trascrizione) => {
-    // Se è un audio con trascrizione, chiedi se mantenerla
-    if (tipo === 'audio' && trascrizione) {
-      const mantieni = window.confirm(
-        '🎤 Questo audio ha una trascrizione.\n\n' +
-        '✅ Vuoi MANTENERE la trascrizione anche dopo aver eliminato l\'audio?\n\n' +
-        '• Sì → La trascrizione sarà salvata nella descrizione dell\'intervento\n' +
-        '• No → Trascrizione eliminata insieme all\'audio'
-      )
-
-      if (mantieni) {
-        // Salva trascrizione nell'intervento prima di eliminare
-        await salvaTrascrizioneInDescrizione(trascrizione)
-      }
-    } else {
-      // Conferma normale per foto o audio senza trascrizione
-      if (!window.confirm('Sei sicuro di voler eliminare questo allegato?')) {
-        return
-      }
+  // 🗑️ Eliminazione semplice
+  const handleDelete = async (allegatoId) => {
+    if (!window.confirm('Sei sicuro di voler eliminare questo allegato?')) {
+      return
     }
 
     try {
@@ -117,120 +94,6 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
     }
   }
 
-  // 💾 Salva trascrizione nella descrizione intervento con numerazione
-  const salvaTrascrizioneInDescrizione = async (trascrizione) => {
-    try {
-      console.log('📥 Carico intervento:', interventoId)
-      
-      // Carica l'intervento attuale
-      const { data: intervento, error: fetchError } = await supabase
-        .from('interventi')
-        .select('descrizione_intervento, trascrizioni_audio')
-        .eq('id', interventoId)
-        .single()
-
-      if (fetchError) {
-        console.error('❌ Errore fetch intervento:', fetchError)
-        throw fetchError
-      }
-
-      console.log('📄 Intervento caricato:', intervento)
-
-      // 🔢 Conta trascrizioni esistenti per numerazione
-      const trascrizioniEsistenti = intervento.trascrizioni_audio || ''
-      // Conta quante volte appare il pattern di numerazione esistente (1), 2), 3), ecc.)
-      const numeroTrascrizioni = (trascrizioniEsistenti.match(/\d+\)/g) || []).length
-      const prossimoNumero = numeroTrascrizioni + 1
-
-      // Prepara testo da aggiungere CON NUMERAZIONE
-      const timestamp = new Date().toLocaleString('it-IT')
-      const nuovaTrascrizioneFormattata = `\n\n${prossimoNumero}) Trascrizione audio (${timestamp}):\n${trascrizione}`
-
-      console.log(`💾 Salvo trascrizione #${prossimoNumero}...`)
-
-      // Aggiorna campo trascrizioni_audio
-      const { error: updateError } = await supabase
-        .from('interventi')
-        .update({
-          trascrizioni_audio: trascrizioniEsistenti + nuovaTrascrizioneFormattata,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', interventoId)
-
-      if (updateError) {
-        console.error('❌ Errore update:', updateError)
-        throw updateError
-      }
-
-      console.log(`✅ Trascrizione #${prossimoNumero} salvata nell'intervento`)
-    } catch (error) {
-      console.error('❌ Errore salvataggio trascrizione:', error)
-      throw error // Re-throw per catturarlo in copyToDescrizione
-    }
-  }
-
-  // ✏️ Attiva/Disattiva editing
-  const toggleEdit = (audioId, currentText) => {
-    if (editingAudioId === audioId) {
-      // Annulla editing
-      setEditingAudioId(null)
-      setEditedText('')
-    } else {
-      // Inizia editing
-      setEditingAudioId(audioId)
-      setEditedText(currentText || '')
-    }
-  }
-
-  // 💾 Salva trascrizione editata
-  const saveTrascrizione = async (allegatoId) => {
-    setIsSaving(true)
-    try {
-      // Aggiorna nel record allegato
-      const { error } = await supabase
-        .from('interventi_allegati')
-        .update({
-          trascrizione_audio: editedText,
-          trascrizione_completata_il: new Date().toISOString()
-        })
-        .eq('id', allegatoId)
-
-      if (error) throw error
-
-      // Ricarica allegati
-      await loadAllegati()
-      
-      // Esci da editing
-      setEditingAudioId(null)
-      setEditedText('')
-      
-      alert('✅ Trascrizione aggiornata con successo!')
-    } catch (error) {
-      console.error('Errore salvataggio trascrizione:', error)
-      alert('❌ Errore durante il salvataggio')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // 📋 Copia trascrizione in descrizione intervento
-  const copyToDescrizione = async (trascrizione) => {
-    try {
-      console.log('🔵 Inizio copia trascrizione')
-      await salvaTrascrizioneInDescrizione(trascrizione)
-      
-      // Mostra feedback visivo
-      setShowCopySuccess(trascrizione)
-      setTimeout(() => setShowCopySuccess(null), 2000)
-      
-      console.log('✅ Copia completata con successo')
-      alert('✅ Trascrizione copiata nella descrizione intervento!')
-    } catch (error) {
-      console.error('❌ Errore copia:', error)
-      alert('❌ Errore durante la copia: ' + error.message)
-    }
-  }
-
   if (isLoading) {
     return (
       <div className="mt-3 p-4 bg-gray-50 rounded-lg">
@@ -248,7 +111,7 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
 
   return (
     <div className="mt-3 space-y-3">
-      {/* 🎤 AUDIO - Player sempre visibili con trascrizione EDITABILE (SOPRA) */}
+      {/* 🎤 AUDIO - Solo player, SENZA trascrizione inline */}
       {audio.length > 0 && (
         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-200">
           {/* Header cliccabile */}
@@ -281,13 +144,13 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
                 <div className="flex items-start gap-3">
                   <Mic className="text-purple-500 mt-1 flex-shrink-0" size={16} />
                   
-                  <div className="flex-1 max-w-full">
+                  <div className="flex-1 min-w-0 w-full">
                     {/* Filename e data */}
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-gray-700 truncate flex-1">
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                      <span className="text-xs font-medium text-gray-700 break-all">
                         {aud.nome_file}
                       </span>
-                      <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">
                         {new Date(aud.caricato_il).toLocaleString('it-IT', {
                           day: '2-digit',
                           month: '2-digit',
@@ -301,7 +164,7 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
                     {aud.signedUrl && (
                       <audio
                         controls
-                        className="w-full mb-2"
+                        className="w-full max-w-full"
                         style={{ height: '32px' }}
                         preload="metadata"
                       >
@@ -310,88 +173,26 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
                       </audio>
                     )}
 
-                    {/* 📝 TRASCRIZIONE EDITABILE - VERSIONE SEMPLIFICATA E ALLINEATA */}
-                    {aud.trascrizione_audio && (
-                      <div className="mt-2 bg-amber-50 border border-amber-200 rounded w-full max-w-full overflow-hidden">
-                        {/* Header con titolo e pulsanti */}
-                        <div className="p-2 border-b border-amber-200 flex items-center justify-between">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <FileText className="text-amber-600 flex-shrink-0" size={14} />
-                            <p className="text-xs font-semibold text-amber-700 truncate">
-                              Trascrizione automatica:
-                            </p>
-                          </div>
-                          
-                          <div className="flex gap-2 flex-shrink-0 ml-2">
-                            {/* Pulsante Edit */}
-                            <button
-                              onClick={() => toggleEdit(aud.id, aud.trascrizione_audio)}
-                              className="p-1.5 hover:bg-amber-200 rounded transition-colors flex-shrink-0"
-                              title={editingAudioId === aud.id ? "Annulla" : "Modifica trascrizione"}
-                            >
-                              {editingAudioId === aud.id ? (
-                                <X size={16} className="text-red-600" />
-                              ) : (
-                                <Edit3 size={16} className="text-amber-700" />
-                              )}
-                            </button>
-                            
-                            {/* Pulsante Copia in Descrizione */}
-                            {showCopySuccess === aud.trascrizione_audio ? (
-                              <Check size={16} className="text-green-600 flex-shrink-0" />
-                            ) : (
-                              <button
-                                onClick={() => copyToDescrizione(aud.trascrizione_audio)}
-                                className="p-1.5 hover:bg-amber-200 rounded transition-colors flex-shrink-0"
-                                title="Copia in descrizione intervento"
-                              >
-                                <Copy size={16} className="text-amber-700" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Contenuto trascrizione */}
-                        <div className="p-3">
-                          {editingAudioId === aud.id ? (
-                            <div className="space-y-2">
-                              <textarea
-                                value={editedText}
-                                onChange={(e) => setEditedText(e.target.value)}
-                                className="w-full p-2 text-xs border border-amber-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                rows={6}
-                                placeholder="Modifica la trascrizione..."
-                              />
-                              <button
-                                onClick={() => saveTrascrizione(aud.id)}
-                                disabled={isSaving}
-                                className="flex items-center gap-1 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded disabled:opacity-50"
-                              >
-                                <Save size={12} />
-                                {isSaving ? 'Salvataggio...' : 'Salva modifiche'}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed break-words">
-                              {aud.trascrizione_audio}
-                            </div>
-                          )}
-                          
-                          {aud.trascrizione_completata_il && !editingAudioId && (
-                            <p className="text-xs text-amber-600 mt-2 italic">
-                              Trascritto il {new Date(aud.trascrizione_completata_il).toLocaleString('it-IT')}
-                            </p>
-                          )}
-                        </div>
+                    {/* Info durata se disponibile */}
+                    {aud.durata_secondi && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Durata: {Math.floor(aud.durata_secondi / 60)}:{(aud.durata_secondi % 60).toString().padStart(2, '0')}
+                      </p>
+                    )}
+
+                    {/* Stato trascrizione (informativo) */}
+                    {aud.trascrizione_stato === 'processing' && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-xs text-blue-600">
+                          ⏳ Trascrizione in corso...
+                        </p>
                       </div>
                     )}
 
-                    {/* 🔄 Stato trascrizione in elaborazione */}
-                    {aud.trascrizione_stato === 'in_elaborazione' && (
-                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                        <p className="text-xs text-blue-600">
-                          🎙️ Trascrizione in corso...
+                    {aud.trascrizione_stato === 'completed' && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                        <p className="text-xs text-green-600">
+                          ✅ Trascrizione completata - Vedi sopra in "Trascrizioni Salvate"
                         </p>
                       </div>
                     )}
@@ -408,7 +209,7 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
 
                   {/* Pulsante elimina */}
                   <button
-                    onClick={() => handleDelete(aud.id, aud.tipo, aud.trascrizione_audio)}
+                    onClick={() => handleDelete(aud.id)}
                     className="p-1.5 hover:bg-red-100 rounded transition-colors flex-shrink-0"
                     title="Elimina audio"
                   >
@@ -422,7 +223,7 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
         </div>
       )}
 
-      {/* 📸 FOTO - Grid di miniature (SOTTO) */}
+      {/* 📸 FOTO - Grid di miniature */}
       {foto.length > 0 && (
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200">
           {/* Header cliccabile */}
@@ -443,73 +244,85 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
               <ChevronDown size={16} className="text-blue-600" />
             )}
           </div>
-          
-          {/* Contenuto collassabile */}
-          {isFotoExpanded && (
-            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-            {foto.map((img) => (
-              <div
-                key={img.id}
-                className="relative group aspect-square bg-gray-200 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
-                onClick={() => setLightboxImage(img)}
-              >
-                <img
-                  src={img.signedUrl || img.url}
-                  alt={img.nome_file}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                
-                {/* Overlay hover */}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <ZoomIn className="text-white" size={24} />
-                </div>
 
-                {/* Pulsante elimina */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleDelete(img.id, img.tipo, null)
-                  }}
-                  className="absolute top-1 right-1 p-1 bg-red-500/90 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          {/* Grid foto collassabile */}
+          {isFotoExpanded && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {foto.map((img) => (
+                <div
+                  key={img.id}
+                  className="relative group bg-white rounded-lg overflow-hidden border border-blue-200 hover:border-blue-400 transition-all aspect-square"
                 >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
+                  {/* Miniatura */}
+                  <img
+                    src={img.signedUrl}
+                    alt={img.nome_file}
+                    className="w-full h-full object-cover cursor-pointer"
+                    onClick={() => setLightboxImage(img)}
+                  />
+
+                  {/* Overlay hover con icone */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setLightboxImage(img)}
+                      className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                      title="Ingrandisci"
+                    >
+                      <ZoomIn size={16} className="text-blue-600" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(img.id)}
+                      className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                      title="Elimina"
+                    >
+                      <Trash2 size={16} className="text-red-500" />
+                    </button>
+                  </div>
+
+                  {/* Nome file (tooltip) */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                    {img.nome_file}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
 
-      {/* 🖼️ LIGHTBOX per foto con SFONDO VERDINO */}
+      {/* 🖼️ LIGHTBOX VERDINO per foto */}
       {lightboxImage && (
         <div
-          className="fixed inset-0 bg-gradient-to-br from-teal-900/95 via-emerald-900/95 to-green-900/95 z-[9999] flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-green-900/90 p-4"
           onClick={() => setLightboxImage(null)}
         >
-          <button
-            onClick={() => setLightboxImage(null)}
-            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
-            aria-label="Chiudi"
-          >
-            <X size={32} />
-          </button>
+          <div className="relative max-w-6xl max-h-full">
+            {/* Pulsante chiudi */}
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute -top-12 right-0 p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+              title="Chiudi"
+            >
+              <X size={24} className="text-gray-700" />
+            </button>
 
-          <img
-            src={lightboxImage.signedUrl || lightboxImage.url}
-            alt={lightboxImage.nome_file}
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+            {/* Immagine grande */}
+            <img
+              src={lightboxImage.signedUrl}
+              alt={lightboxImage.nome_file}
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
 
-          <div className="absolute bottom-4 left-4 right-4 text-center">
-            <p className="text-white text-sm drop-shadow-lg">
-              {lightboxImage.nome_file}
-            </p>
-            <p className="text-emerald-200 text-xs mt-1 drop-shadow-lg">
-              {new Date(lightboxImage.caricato_il).toLocaleString('it-IT')}
-            </p>
+            {/* Info foto */}
+            <div className="absolute -bottom-16 left-0 right-0 bg-white/90 p-3 rounded-lg">
+              <p className="text-sm font-medium text-gray-800 truncate">
+                {lightboxImage.nome_file}
+              </p>
+              <p className="text-xs text-gray-600">
+                {new Date(lightboxImage.caricato_il).toLocaleString('it-IT')}
+              </p>
+            </div>
           </div>
         </div>
       )}

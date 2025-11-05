@@ -1,16 +1,19 @@
-// components/TicketKPIs.jsx
+// components/TicketKPIs.jsx - VERSIONE CORRETTA V2
 'use client'
 
 import { AlertCircle, Clock, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react'
 
 /**
  * KPI Cards Interattive per Ticket
- * - Cliccabili per filtrare i ticket
- * - Design moderno con gradients
- * - Animazioni hover
- * - Indicatore filtro attivo
+ * 
+ * LOGICA FILTRI:
+ * - Aperti: stato = 'aperto'
+ * - In Lavorazione: stato = 'in_lavorazione' + priorità 'alta'
+ * - Risolti: stato = 'risolto' o 'chiuso'
+ * - Critici: priorità = 'critica' (SOLO critica, esclusa alta)
+ * - Tempo Medio: informativo, non filtra
  */
-export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
+export default function TicketKPIs({ stats, filtroStato, setFiltroStato, filtroPriorita, setFiltroPriorita }) {
   
   const kpis = [
     {
@@ -26,7 +29,8 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
       textColor: 'text-blue-900 dark:text-blue-100',
       hoverBorder: 'hover:border-blue-400 dark:hover:border-blue-600',
       activeBg: 'ring-4 ring-blue-300 dark:ring-blue-700',
-      description: 'Nuovi ticket'
+      description: 'Nuovi ticket',
+      filtroType: 'stato'
     },
     {
       id: 'in_lavorazione',
@@ -41,7 +45,8 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
       textColor: 'text-amber-900 dark:text-amber-100',
       hoverBorder: 'hover:border-amber-400 dark:hover:border-amber-600',
       activeBg: 'ring-4 ring-amber-300 dark:ring-amber-700',
-      description: 'In corso'
+      description: 'In corso + Alta',
+      filtroType: 'stato'
     },
     {
       id: 'risolto',
@@ -56,7 +61,8 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
       textColor: 'text-green-900 dark:text-green-100',
       hoverBorder: 'hover:border-green-400 dark:hover:border-green-600',
       activeBg: 'ring-4 ring-green-300 dark:ring-green-700',
-      description: 'Completati'
+      description: 'Completati',
+      filtroType: 'stato'
     },
     {
       id: 'critici',
@@ -71,8 +77,7 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
       textColor: 'text-red-900 dark:text-red-100',
       hoverBorder: 'hover:border-red-400 dark:hover:border-red-600',
       activeBg: 'ring-4 ring-red-300 dark:ring-red-700',
-      description: 'Alta priorità',
-      // Per i critici, filtriamo per priorità invece che per stato
+      description: 'Solo critici',
       filtroType: 'priorita'
     },
     {
@@ -89,33 +94,46 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
       hoverBorder: 'hover:border-purple-400 dark:hover:border-purple-600',
       activeBg: 'ring-4 ring-purple-300 dark:ring-purple-700',
       description: 'Risoluzione',
-      // Questo KPI è informativo, non filtra
       filtroType: 'info'
     }
   ]
 
   const handleKPIClick = (kpi) => {
-    if (kpi.filtroType === 'info') return // Non fare nulla per KPI informativi
+    if (kpi.filtroType === 'info') return
     
-    if (kpi.filtroType === 'priorita') {
-      // TODO: Gestire filtro priorità (se necessario)
-      console.log('Filtro priorità critica')
+    // ✅ Gestione filtro priorità CRITICI (solo critica)
+    if (kpi.filtroType === 'priorita' && kpi.id === 'critici') {
+      if (filtroPriorita === 'critica') {
+        // Disattiva filtro
+        setFiltroPriorita('tutti')
+        setFiltroStato('tutti')
+      } else {
+        // Attiva filtro SOLO critici
+        setFiltroPriorita('critica')
+        setFiltroStato('tutti')
+      }
       return
     }
     
     // Gestione filtro stato
     if (filtroStato === kpi.id) {
-      // Se già filtrato, rimuovi filtro
+      // Disattiva filtro
       setFiltroStato('tutti')
     } else {
-      // Applica nuovo filtro
+      // Attiva nuovo filtro stato
       setFiltroStato(kpi.id)
+      // Resetta filtro priorità
+      setFiltroPriorita('tutti')
     }
   }
 
   const isActive = (kpiId, kpiType) => {
     if (kpiType === 'info') return false
-    if (kpiType === 'priorita') return false // TODO: check filtroPriorita se implementato
+    
+    if (kpiType === 'priorita' && kpiId === 'critici') {
+      return filtroPriorita === 'critica'
+    }
+    
     return filtroStato === kpiId
   }
 
@@ -141,7 +159,6 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
               ${active ? 'shadow-xl scale-105' : 'shadow-sm'}
             `}
           >
-            {/* Badge "Attivo" quando filtrato */}
             {active && (
               <div className="absolute top-2 right-2">
                 <div className={`px-2 py-1 rounded-full text-xs font-bold ${kpi.iconColor} ${kpi.iconBg}`}>
@@ -150,7 +167,6 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
               </div>
             )}
 
-            {/* Icona e Valore */}
             <div className="flex items-center justify-between mb-3">
               <div className={`p-3 rounded-xl ${kpi.iconBg} transition-transform duration-300 ${active ? 'scale-110' : ''}`}>
                 <Icon className={kpi.iconColor} size={24} />
@@ -160,27 +176,14 @@ export default function TicketKPIs({ stats, filtroStato, setFiltroStato }) {
               </span>
             </div>
 
-            {/* Label e Descrizione */}
             <div>
-              <h3 className={`font-semibold ${kpi.textColor} mb-1 text-lg`}>
+              <h3 className={`text-lg font-bold ${kpi.textColor} mb-1`}>
                 {kpi.label}
               </h3>
-              <p className="text-sm opacity-70 dark:opacity-60">
+              <p className={`text-sm ${kpi.textColor} opacity-70`}>
                 {kpi.description}
               </p>
             </div>
-
-            {/* Indicatore hover (solo per cliccabili) */}
-            {isClickable && !active && (
-              <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <p className="text-xs font-medium opacity-70">
-                  Click per filtrare
-                </p>
-              </div>
-            )}
-
-            {/* Effetto gradiente decorativo */}
-            <div className={`absolute -right-8 -bottom-8 w-32 h-32 rounded-full bg-gradient-to-br ${kpi.gradient} opacity-10 blur-2xl transition-all ${active ? 'opacity-20 scale-150' : ''}`} />
           </div>
         )
       })}

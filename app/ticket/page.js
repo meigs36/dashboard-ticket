@@ -95,11 +95,25 @@ export default function TicketPage() {
     }
   }
 
+  // ✅ FIX 1 e 2: Logica KPI corretta
   function calcolaStats() {
     const aperti = tickets.filter(t => t.stato === 'aperto').length
-    const inLavorazione = tickets.filter(t => t.stato === 'in_lavorazione' || t.stato === 'assegnato').length
+    
+    // ✅ FIX 1: In Lavorazione include anche priorità "alta"
+    const inLavorazione = tickets.filter(t => 
+      t.stato === 'in_lavorazione' || 
+      t.stato === 'assegnato' || 
+      t.priorita === 'alta'
+    ).length
+    
     const risolti = tickets.filter(t => t.stato === 'risolto' || t.stato === 'chiuso').length
-    const critici = tickets.filter(t => t.priorita === 'alta' || t.priorita === 'critica').length
+    
+    // ✅ FIX 2: Critici conta SOLO priorità "critica" ed esclude risolti/chiusi
+    const critici = tickets.filter(t => 
+      t.priorita === 'critica' && 
+      t.stato !== 'risolto' && 
+      t.stato !== 'chiuso'
+    ).length
     
     const oggi = new Date()
     const ieri = new Date(oggi.getTime() - 24 * 60 * 60 * 1000)
@@ -137,9 +151,10 @@ export default function TicketPage() {
       ticket.clienti?.ragione_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.descrizione?.toLowerCase().includes(searchTerm.toLowerCase())
     
+    // ✅ FIX 3: matchStato include priorità "alta" nel filtro "in_lavorazione"
     const matchStato = filtroStato === 'tutti' || 
       (filtroStato === 'in_lavorazione' 
-        ? (ticket.stato === 'in_lavorazione' || ticket.stato === 'assegnato')
+        ? (ticket.stato === 'in_lavorazione' || ticket.stato === 'assegnato' || ticket.priorita === 'alta')
         : (filtroStato === 'risolto'
           ? (ticket.stato === 'risolto' || ticket.stato === 'chiuso')
           : ticket.stato === filtroStato
@@ -205,67 +220,73 @@ export default function TicketPage() {
     const ore = Math.floor(diff / (1000 * 60 * 60))
     const giorni = Math.floor(ore / 24)
     
-    if (giorni > 0) return `${giorni}g fa`
-    if (ore > 0) return `${ore}h fa`
-    return 'Appena aperto'
+    if (giorni > 0) {
+      return `${giorni} ${giorni === 1 ? 'giorno' : 'giorni'} fa`
+    } else if (ore > 0) {
+      return `${ore} ${ore === 1 ? 'ora' : 'ore'} fa`
+    } else {
+      return 'Meno di 1 ora fa'
+    }
   }
 
-  function handleAzioniClick(ticket, e) {
+  const handleAzioniClick = (ticket, e) => {
     if (e) e.stopPropagation()
     setTicketSelezionato(ticket)
     setMostraModalAzioni(true)
   }
 
-  function handleModalClose() {
+  const handleModalClose = () => {
     setMostraModalAzioni(false)
     setTicketSelezionato(null)
   }
 
-  function handleTicketUpdate() {
-    loadTickets()
+  const handleTicketUpdate = async () => {
+    await loadTickets()
+    handleModalClose()
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-blue-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Caricamento ticket...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Caricamento ticket...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-blue-900 pb-12">
+      <div className="max-w-7xl mx-auto px-4 pt-8">
+        {/* Header */}
         <div className="mb-8">
-          <Link 
-            href="/"
-            className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
-          >
-            <ArrowLeft size={20} />
-            <span>Torna alla Dashboard</span>
-          </Link>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Gestione Ticket</h1>
-              <p className="text-gray-600 dark:text-gray-400">{stats.totali} ticket totali</p>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                Gestione Ticket
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Monitora e gestisci tutti i ticket di assistenza
+              </p>
             </div>
-            <Link
+            <Link 
               href="/ticket/nuovo"
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-lg"
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg font-medium"
             >
-              + Nuovo Ticket
+              <FileText size={20} />
+              <span>Nuovo Ticket</span>
             </Link>
           </div>
         </div>
 
-        {/* KPI Cards */}
+        {/* ✅ FIX 4: KPI Cards con props filtroPriorita e setFiltroPriorita */}
         <TicketKPIs 
           stats={stats}
           filtroStato={filtroStato}
           setFiltroStato={setFiltroStato}
+          filtroPriorita={filtroPriorita}
+          setFiltroPriorita={setFiltroPriorita}
         />
 
         {/* Search and Filters */}

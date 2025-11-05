@@ -105,10 +105,10 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
 
     setLoading(true)
     try {
-      // Crea blob dal file
-      const blob = new Blob([selectedAudioFile], { type: selectedAudioFile.type })
+      // Converti File in Blob se necessario
+      const audioBlob = new Blob([selectedAudioFile], { type: selectedAudioFile.type })
       
-      const result = await uploadAudio(blob, interventoId, user.id)
+      const result = await uploadAudio(audioBlob, interventoId, user.id, selectedAudioFile.name)
       
       setSelectedAudioFile(null)
       if (audioFileInputRef.current) {
@@ -132,14 +132,14 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
   // === GESTIONE FOTO ===
 
   async function handlePhotoInput(e) {
-    const files = e.target.files
-    if (!files || files.length === 0) return
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
 
     try {
       await captureMultiplePhotos(files)
     } catch (error) {
       console.error('Errore cattura foto:', error)
-      alert('❌ Errore: ' + error.message)
+      alert('❌ Errore durante la cattura delle foto')
     }
   }
 
@@ -147,11 +147,9 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
     if (photos.length === 0 || !user) return
 
     setLoading(true)
-    setUploadProgress({ current: 0, total: photos.length })
-
     try {
       const results = await uploadMultiplePhotos(
-        photos.map(p => p.file),
+        photos,
         interventoId,
         user.id,
         (current, total) => {
@@ -159,93 +157,95 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
         }
       )
 
-      const successi = results.filter(r => r.success).length
-      const errori = results.filter(r => !r.success).length
-
       clearPhotos()
-      
+      setUploadProgress(null)
+
       if (onMediaUploaded) {
-        onMediaUploaded({ tipo: 'foto', results })
+        results.forEach(result => {
+          onMediaUploaded({ tipo: 'foto', ...result })
+        })
       }
 
-      if (errori === 0) {
-        alert(`✅ ${successi} foto caricate!`)
-      } else {
-        alert(`⚠️ ${successi} foto caricate, ${errori} con errori.`)
-      }
-
+      alert(`✅ ${results.length} foto caricate con successo!`)
+      
     } catch (error) {
       console.error('Errore upload foto:', error)
       alert('❌ Errore: ' + error.message)
     } finally {
       setLoading(false)
-      setUploadProgress(null)
     }
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-      {/* Header con Tab */}
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      {/* ✅ FIX 1: Header con Tab SCROLLABILI su mobile */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <div className="flex gap-2 px-4 py-3 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('registra-audio')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'registra-audio'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-            }`}
-          >
-            <Mic size={16} />
-            Registra Audio
-          </button>
+        {/* Container scrollabile con padding laterale */}
+        <div className="px-3 sm:px-6">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
+            <button
+              onClick={() => setActiveTab('registra-audio')}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-t-lg font-medium transition-colors whitespace-nowrap text-sm sm:text-base flex-shrink-0 ${
+                activeTab === 'registra-audio'
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Mic size={16} className="flex-shrink-0" />
+              <span className="hidden xs:inline">Registra Audio</span>
+              <span className="xs:hidden">Registra</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('carica-audio')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'carica-audio'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-            }`}
-          >
-            <FileAudio size={16} />
-            Carica Audio
-          </button>
+            <button
+              onClick={() => setActiveTab('carica-audio')}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-t-lg font-medium transition-colors whitespace-nowrap text-sm sm:text-base flex-shrink-0 ${
+                activeTab === 'carica-audio'
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700'
+              }`}
+            >
+              <FileAudio size={16} className="flex-shrink-0" />
+              <span className="hidden xs:inline">Carica Audio</span>
+              <span className="xs:hidden">Carica</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('foto')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'foto'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
-            }`}
-          >
-            <Camera size={16} />
-            Aggiungi Foto
-          </button>
+            <button
+              onClick={() => setActiveTab('foto')}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-t-lg font-medium transition-colors whitespace-nowrap text-sm sm:text-base flex-shrink-0 ${
+                activeTab === 'foto'
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Camera size={16} className="flex-shrink-0" />
+              <span className="hidden xs:inline">Aggiungi Foto</span>
+              <span className="xs:hidden">Foto</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Contenuto Tab */}
-      <div className="p-6">
+      {/* ✅ FIX 2: Contenuto Tab con padding responsive */}
+      <div className="p-3 sm:p-6">
         {/* TAB REGISTRA AUDIO */}
         {activeTab === 'registra-audio' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="text-center">
               {!isRecording && !audioBlob && (
                 <button
                   onClick={startRecording}
                   disabled={loading}
-                  className="inline-flex items-center gap-3 px-8 py-4 bg-red-500 hover:bg-red-600 text-white rounded-full font-semibold shadow-lg transition-all disabled:opacity-50"
+                  className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-8 py-3 sm:py-4 bg-red-500 hover:bg-red-600 text-white rounded-full font-semibold shadow-lg transition-all disabled:opacity-50 text-sm sm:text-base"
                 >
-                  <Mic size={24} />
-                  Inizia Registrazione
+                  <Mic size={20} className="sm:w-6 sm:h-6" />
+                  <span className="hidden xs:inline">Inizia Registrazione</span>
+                  <span className="xs:hidden">Registra</span>
                 </button>
               )}
 
               {isRecording && (
                 <div className="space-y-4">
-                  <div className="text-4xl font-bold text-red-500 animate-pulse">
+                  <div className="text-3xl sm:text-4xl font-bold text-red-500 animate-pulse">
                     {recordingTime}
                   </div>
 
@@ -253,24 +253,24 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                     {!isPaused ? (
                       <button
                         onClick={pauseRecording}
-                        className="p-4 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full"
+                        className="p-3 sm:p-4 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full"
                       >
-                        <Pause size={24} />
+                        <Pause size={20} className="sm:w-6 sm:h-6" />
                       </button>
                     ) : (
                       <button
                         onClick={resumeRecording}
-                        className="p-4 bg-green-500 hover:bg-green-600 text-white rounded-full"
+                        className="p-3 sm:p-4 bg-green-500 hover:bg-green-600 text-white rounded-full"
                       >
-                        <Play size={24} />
+                        <Play size={20} className="sm:w-6 sm:h-6" />
                       </button>
                     )}
 
                     <button
                       onClick={stopRecording}
-                      className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-full"
+                      className="p-3 sm:p-4 bg-red-600 hover:bg-red-700 text-white rounded-full"
                     >
-                      <Square size={24} />
+                      <Square size={20} className="sm:w-6 sm:h-6" />
                     </button>
                   </div>
                 </div>
@@ -280,34 +280,35 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                 <div className="space-y-4">
                   <audio src={audioUrl} controls className="w-full" />
 
-                  <div className="flex justify-center gap-3">
+                  <div className="flex flex-col sm:flex-row justify-center gap-3">
                     <button
                       onClick={handleUploadRecordedAudio}
                       disabled={loading}
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 text-sm sm:text-base"
                     >
                       {loading ? (
                         <>
-                          <Loader2 size={20} className="animate-spin" />
-                          Caricamento...
+                          <Loader2 size={18} className="animate-spin sm:w-5 sm:h-5" />
+                          <span>Caricamento...</span>
                         </>
                       ) : (
                         <>
-                          <Upload size={20} />
-                          Carica Audio
+                          <Upload size={18} className="sm:w-5 sm:h-5" />
+                          <span>Carica Audio</span>
                         </>
                       )}
                     </button>
 
                     <button
                       onClick={cancelRecording}
-                      className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium"
+                      className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium text-sm sm:text-base"
                     >
-                      <Trash2 size={20} />
+                      <Trash2 size={18} className="sm:w-5 sm:h-5" />
+                      <span>Elimina</span>
                     </button>
                   </div>
 
-                  <p className="text-sm text-gray-500">
+                  <p className="text-xs sm:text-sm text-gray-500">
                     💡 L'audio verrà trascritto automaticamente
                   </p>
                 </div>
@@ -318,14 +319,14 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
 
         {/* TAB CARICA AUDIO DA FILE */}
         {activeTab === 'carica-audio' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="text-center">
               <div className="max-w-md mx-auto space-y-4">
-                <div className="p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                  <FileAudio size={48} className="mx-auto mb-4 text-gray-400" />
+                <div className="p-6 sm:p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                  <FileAudio size={40} className="sm:w-12 sm:h-12 mx-auto mb-4 text-gray-400" />
                   
-                  <label className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium cursor-pointer">
-                    <Upload size={20} />
+                  <label className="inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium cursor-pointer text-sm sm:text-base">
+                    <Upload size={18} className="sm:w-5 sm:h-5" />
                     Seleziona File Audio
                     <input
                       ref={audioFileInputRef}
@@ -336,7 +337,7 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                     />
                   </label>
 
-                  <p className="mt-3 text-sm text-gray-500">
+                  <p className="mt-3 text-xs sm:text-sm text-gray-500">
                     Formati supportati: MP3, WAV, M4A, OGG, WebM
                     <br />
                     Max 50MB
@@ -345,18 +346,18 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
 
                 {selectedAudioFile && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 break-all">
                       📁 {selectedAudioFile.name}
                     </p>
-                    <p className="text-xs text-gray-500 mb-4">
+                    <p className="text-xs text-gray-500 mb-3">
                       {(selectedAudioFile.size / 1024 / 1024).toFixed(2)} MB
                     </p>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <button
                         onClick={handleUploadAudioFile}
                         disabled={loading}
-                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50"
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 text-sm"
                       >
                         {loading ? (
                           <>
@@ -366,7 +367,7 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                         ) : (
                           <>
                             <Upload size={18} />
-                            Carica
+                            Carica File
                           </>
                         )}
                       </button>
@@ -378,7 +379,7 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                             audioFileInputRef.current.value = ''
                           }
                         }}
-                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg"
+                        className="px-4 py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -396,11 +397,20 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
 
         {/* TAB FOTO */}
         {activeTab === 'foto' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="text-center">
-              <label className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold cursor-pointer shadow-lg transition-all">
-                <Camera size={24} />
-                {photos.length === 0 ? 'Scatta o Seleziona Foto' : `${photos.length} Foto Selezionate`}
+              <label className="inline-flex items-center gap-2 sm:gap-3 px-4 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold cursor-pointer shadow-lg transition-all text-sm sm:text-base">
+                <Camera size={20} className="sm:w-6 sm:h-6" />
+                <span className="break-words">
+                  {photos.length === 0 ? (
+                    <>
+                      <span className="hidden xs:inline">Scatta o Seleziona Foto</span>
+                      <span className="xs:hidden">Aggiungi Foto</span>
+                    </>
+                  ) : (
+                    `${photos.length} Foto`
+                  )}
+                </span>
                 <input
                   type="file"
                   accept="image/*"
@@ -411,14 +421,14 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                 />
               </label>
 
-              <p className="mt-3 text-sm text-gray-500">
+              <p className="mt-3 text-xs sm:text-sm text-gray-500">
                 Puoi selezionare più foto contemporaneamente
               </p>
             </div>
 
             {photos.length > 0 && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
                   {photos.map((photo, index) => (
                     <div key={index} className="relative aspect-square group">
                       <img
@@ -428,17 +438,17 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                       />
                       <button
                         onClick={() => removePhoto(index)}
-                        className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 sm:top-2 sm:right-2 p-1.5 sm:p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} className="sm:w-4 sm:h-4" />
                       </button>
                     </div>
                   ))}
                 </div>
 
                 {uploadProgress && (
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <div className="flex justify-between text-sm mb-2">
+                  <div className="p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div className="flex justify-between text-xs sm:text-sm mb-2">
                       <span>Caricamento foto...</span>
                       <span>{uploadProgress.current} / {uploadProgress.total}</span>
                     </div>
@@ -451,20 +461,20 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                   </div>
                 )}
 
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={handleUploadPhotos}
                     disabled={loading}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold disabled:opacity-50 text-sm sm:text-base"
                   >
                     {loading ? (
                       <>
-                        <Loader2 size={20} className="animate-spin" />
+                        <Loader2 size={18} className="animate-spin sm:w-5 sm:h-5" />
                         Caricamento...
                       </>
                     ) : (
                       <>
-                        <Upload size={20} />
+                        <Upload size={18} className="sm:w-5 sm:h-5" />
                         Carica {photos.length} Foto
                       </>
                     )}
@@ -472,9 +482,9 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
 
                   <button
                     onClick={clearPhotos}
-                    className="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold"
+                    className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold text-sm sm:text-base"
                   >
-                    <Trash2 size={20} />
+                    <Trash2 size={18} className="sm:w-5 sm:h-5" />
                   </button>
                 </div>
               </div>
@@ -482,6 +492,17 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
           </div>
         )}
       </div>
+
+      {/* ✅ CSS per nascondere scrollbar ma mantenere funzionalità */}
+      <style jsx>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   )
 }
