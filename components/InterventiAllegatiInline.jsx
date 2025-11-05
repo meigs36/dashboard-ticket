@@ -12,6 +12,7 @@ import { Image, Mic, Trash2, X, ZoomIn, FileText, Edit3, Save, Copy, Check, Chev
  * - 🗑️ Eliminazione intelligente (chiede se mantenere trascrizione)
  * - 💾 Auto-save trascrizione nell'intervento
  * - 🎨 Lightbox con sfondo verdino
+ * - ✨ FIX ALLINEAMENTO MOBILE PERFETTO
  */
 export default function InterventiAllegatiInline({ interventoId, onDelete }) {
   const [allegati, setAllegati] = useState([])
@@ -280,10 +281,10 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
                 <div className="flex items-start gap-3">
                   <Mic className="text-purple-500 mt-1 flex-shrink-0" size={16} />
                   
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 max-w-full">
                     {/* Filename e data */}
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-gray-700 truncate">
+                      <span className="text-xs font-medium text-gray-700 truncate flex-1">
                         {aud.nome_file}
                       </span>
                       <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
@@ -309,77 +310,89 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
                       </audio>
                     )}
 
-                    {/* 📝 TRASCRIZIONE EDITABILE */}
+                    {/* 📝 TRASCRIZIONE EDITABILE - VERSIONE SEMPLIFICATA E ALLINEATA */}
                     {aud.trascrizione_audio && (
-                      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded relative">
-                        <div className="flex items-start gap-2 mb-2">
-                          <FileText className="text-amber-600 flex-shrink-0 mt-0.5" size={14} />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="text-xs font-semibold text-amber-700">
-                                Trascrizione automatica:
-                              </p>
-                              <div className="flex gap-2">
-                                {/* Pulsante Edit */}
-                                <button
-                                  onClick={() => toggleEdit(aud.id, aud.trascrizione_audio)}
-                                  className="p-1.5 hover:bg-amber-200 rounded transition-colors"
-                                  title={editingAudioId === aud.id ? "Annulla" : "Modifica trascrizione"}
-                                >
-                                  {editingAudioId === aud.id ? (
-                                    <X size={18} className="text-red-600" />
-                                  ) : (
-                                    <Edit3 size={18} className="text-amber-700" />
-                                  )}
-                                </button>
-                                
-                                {/* Pulsante Copia in Descrizione */}
-                                {showCopySuccess === aud.trascrizione_audio ? (
-                                  <Check size={18} className="text-green-600" />
-                                ) : (
-                                  <button
-                                    onClick={() => copyToDescrizione(aud.trascrizione_audio)}
-                                    className="p-1.5 hover:bg-amber-200 rounded transition-colors"
-                                    title="Copia in descrizione intervento"
-                                  >
-                                    <Copy size={18} className="text-amber-700" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                      <div className="mt-2 bg-amber-50 border border-amber-200 rounded w-full max-w-full overflow-hidden">
+                        {/* Header con titolo e pulsanti */}
+                        <div className="p-2 border-b border-amber-200 flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <FileText className="text-amber-600 flex-shrink-0" size={14} />
+                            <p className="text-xs font-semibold text-amber-700 truncate">
+                              Trascrizione automatica:
+                            </p>
+                          </div>
+                          
+                          <div className="flex gap-2 flex-shrink-0 ml-2">
+                            {/* Pulsante Edit */}
+                            <button
+                              onClick={() => toggleEdit(aud.id, aud.trascrizione_audio)}
+                              className="p-1.5 hover:bg-amber-200 rounded transition-colors flex-shrink-0"
+                              title={editingAudioId === aud.id ? "Annulla" : "Modifica trascrizione"}
+                            >
+                              {editingAudioId === aud.id ? (
+                                <X size={16} className="text-red-600" />
+                              ) : (
+                                <Edit3 size={16} className="text-amber-700" />
+                              )}
+                            </button>
                             
-                            {/* Testo trascrizione o Textarea edit */}
-                            {editingAudioId === aud.id ? (
-                              <div className="space-y-2">
-                                <textarea
-                                  value={editedText}
-                                  onChange={(e) => setEditedText(e.target.value)}
-                                  className="w-full p-2 text-xs border border-amber-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                  rows={6}
-                                  placeholder="Modifica la trascrizione..."
-                                />
-                                <button
-                                  onClick={() => saveTrascrizione(aud.id)}
-                                  disabled={isSaving}
-                                  className="flex items-center gap-1 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded disabled:opacity-50"
-                                >
-                                  <Save size={12} />
-                                  {isSaving ? 'Salvataggio...' : 'Salva modifiche'}
-                                </button>
-                              </div>
+                            {/* Pulsante Copia in Descrizione */}
+                            {showCopySuccess === aud.trascrizione_audio ? (
+                              <Check size={16} className="text-green-600 flex-shrink-0" />
                             ) : (
-                              <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                {aud.trascrizione_audio}
-                              </p>
+                              <button
+                                onClick={() => copyToDescrizione(aud.trascrizione_audio)}
+                                className="p-1.5 hover:bg-amber-200 rounded transition-colors flex-shrink-0"
+                                title="Copia in descrizione intervento"
+                              >
+                                <Copy size={16} className="text-amber-700" />
+                              </button>
                             )}
                           </div>
                         </div>
                         
-                        {aud.trascrizione_completata_il && !editingAudioId && (
-                          <p className="text-xs text-amber-600 mt-1 italic">
-                            Trascritto il {new Date(aud.trascrizione_completata_il).toLocaleString('it-IT')}
-                          </p>
-                        )}
+                        {/* Contenuto trascrizione */}
+                        <div className="p-3">
+                          {editingAudioId === aud.id ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editedText}
+                                onChange={(e) => setEditedText(e.target.value)}
+                                className="w-full p-2 text-xs border border-amber-300 rounded resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                rows={6}
+                                placeholder="Modifica la trascrizione..."
+                              />
+                              <button
+                                onClick={() => saveTrascrizione(aud.id)}
+                                disabled={isSaving}
+                                className="flex items-center gap-1 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded disabled:opacity-50"
+                              >
+                                <Save size={12} />
+                                {isSaving ? 'Salvataggio...' : 'Salva modifiche'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed break-words">
+                              {aud.trascrizione_audio}
+                            </div>
+                          )}
+                          
+                          {aud.trascrizione_completata_il && !editingAudioId && (
+                            <p className="text-xs text-amber-600 mt-2 italic">
+                              Trascritto il {new Date(aud.trascrizione_completata_il).toLocaleString('it-IT')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 🔄 Stato trascrizione in elaborazione */}
+                    {aud.trascrizione_stato === 'in_elaborazione' && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <p className="text-xs text-blue-600">
+                          🎙️ Trascrizione in corso...
+                        </p>
                       </div>
                     )}
 

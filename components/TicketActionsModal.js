@@ -404,78 +404,76 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+        {/* Header - Responsive */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex-1 min-w-0 mr-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
               Ticket #{ticket.numero_ticket}
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
               {ticket.oggetto}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
           >
-            <X size={24} className="text-gray-500" />
+            <X size={20} className="sm:w-6 sm:h-6 text-gray-500" />
           </button>
         </div>
 
-        {/* Tabs Navigation - FIX COMPLETO */}
+        {/* Tabs Navigation - RESPONSIVE FIX COMPLETO */}
         <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-4">
-            <div className="pl-6" /> {/* Spacer sinistro */}
-            
-            <button
-              onClick={() => setActiveTab('azioni')}
-              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
-                activeTab === 'azioni'
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-              }`}
-            >
-              <CheckCircle size={18} />
-              Azioni
-            </button>
+          <div className="overflow-x-auto overflow-y-hidden scrollbar-hide">
+            <div className="flex min-w-min">
+              <button
+                onClick={() => setActiveTab('azioni')}
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-3 font-medium transition-all whitespace-nowrap flex-shrink-0 border-b-2 ${
+                  activeTab === 'azioni'
+                    ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <CheckCircle size={16} className="hidden sm:block flex-shrink-0" />
+                <span className="text-xs sm:text-sm font-medium">Azioni</span>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('interventi')}
-              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
-                activeTab === 'interventi'
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-              }`}
-            >
-              <Briefcase size={18} />
-              Interventi
-            </button>
+              <button
+                onClick={() => setActiveTab('interventi')}
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-3 font-medium transition-all whitespace-nowrap flex-shrink-0 border-b-2 ${
+                  activeTab === 'interventi'
+                    ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <Briefcase size={16} className="hidden sm:block flex-shrink-0" />
+                <span className="text-xs sm:text-sm font-medium">Interventi</span>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('note')}
-              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
-                activeTab === 'note'
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-              }`}
-            >
-              <MessageSquare size={18} />
-              Note
-            </button>
+              <button
+                onClick={() => setActiveTab('note')}
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-3 font-medium transition-all whitespace-nowrap flex-shrink-0 border-b-2 ${
+                  activeTab === 'note'
+                    ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <MessageSquare size={16} className="hidden sm:block flex-shrink-0" />
+                <span className="text-xs sm:text-sm font-medium">Note</span>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('storico')}
-              className={`flex items-center gap-2 px-4 py-3 font-medium rounded-t-lg transition-colors whitespace-nowrap flex-shrink-0 ${
-                activeTab === 'storico'
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-600'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-              }`}
-            >
-              <History size={18} />
-              Storico
-            </button>
-            
-            <div className="pr-6" /> {/* Spacer destro */}
+              <button
+                onClick={() => setActiveTab('storico')}
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-3 font-medium transition-all whitespace-nowrap flex-shrink-0 border-b-2 ${
+                  activeTab === 'storico'
+                    ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <History size={16} className="hidden sm:block flex-shrink-0" />
+                <span className="text-xs sm:text-sm font-medium">Storico</span>
+              </button>
+            </div>
           </div>
         </div>
 

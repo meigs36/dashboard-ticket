@@ -232,54 +232,52 @@ export default function InterventiTab({ ticket, onUpdate }) {
               return (
                 <div
                   key={intervento.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
                 >
-                  <div className="flex justify-between">
-                    <div className="flex-1">
-                      {/* Header Intervento */}
-                      <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <div className="flex justify-between gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      {/* Header Intervento - RESPONSIVE */}
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
                         {/* Data */}
-                        <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                          <Calendar size={16} />
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                          <Calendar size={16} className="flex-shrink-0" />
                           <span className="font-medium">{formatDate(intervento.data_intervento)}</span>
                         </div>
 
                         {/* Orario */}
-                        <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                          <Clock size={16} />
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                          <Clock size={14} className="flex-shrink-0" />
                           <span>
                             {intervento.ora_inizio} - {intervento.ora_fine}
-                            <span className="ml-1 text-xs">({formatDurata(durataEffettiva)})</span>
+                            <span className="ml-1 text-[10px] sm:text-xs">({formatDurata(durataEffettiva)})</span>
                           </span>
                         </div>
 
-                        {/* Tecnico */}
-                        <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                          <UserIcon size={16} />
-                          <span>{intervento.tecnico_nome}</span>
-                        </div>
-
-                        {/* Badge Tipo */}
-                        {intervento.is_loco && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
-                            IN LOCO
+                        {/* ⚡ BADGE MODALITÀ INTERVENTO - SEMPRE VISIBILE */}
+                        {intervento.modalita_intervento && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded flex-shrink-0 ${
+                            intervento.modalita_intervento?.toLowerCase() === 'remoto' 
+                              ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
+                              : (intervento.modalita_intervento?.toLowerCase() === 'in_loco' || 
+                                 intervento.modalita_intervento?.toLowerCase() === 'in loco' ||
+                                 intervento.modalita_intervento?.toLowerCase() === 'loco')
+                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                          }`}>
+                            {intervento.modalita_intervento?.toLowerCase() === 'remoto' 
+                              ? '💻 Remoto'
+                              : (intervento.modalita_intervento?.toLowerCase() === 'in_loco' || 
+                                 intervento.modalita_intervento?.toLowerCase() === 'in loco' ||
+                                 intervento.modalita_intervento?.toLowerCase() === 'loco')
+                              ? '🏢 In Loco'
+                              : '🛡️ Garanzia'
+                            }
                           </span>
                         )}
                         
-                        {intervento.is_remoto && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
-                            REMOTO
-                          </span>
-                        )}
-                        
-                        {intervento.is_aggiornamento && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
-                            AGGIORNAMENTO
-                          </span>
-                        )}
-                        
+                        {/* Badge Cortesia */}
                         {intervento.is_cortesia && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded flex items-center gap-1">
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded flex items-center gap-1 flex-shrink-0 border border-yellow-200 dark:border-yellow-800">
                             <Gift size={12} />
                             CORTESIA
                           </span>
@@ -287,14 +285,20 @@ export default function InterventiTab({ ticket, onUpdate }) {
 
                         {/* Badge Contratto */}
                         {intervento.num_contratto && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">
+                          <span className="px-2 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
                             {intervento.num_contratto}
                           </span>
                         )}
                       </div>
+                      
+                      {/* Tecnico - NUOVA RIGA per mobile */}
+                      <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">
+                        <UserIcon size={14} className="flex-shrink-0" />
+                        <span className="truncate">{intervento.tecnico_nome}</span>
+                      </div>
 
-                      {/* Descrizione */}
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 whitespace-pre-wrap">
+                      {/* Descrizione - Responsive */}
+                      <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 mb-2 sm:mb-3 break-words whitespace-pre-wrap">
                         {intervento.descrizione_intervento || <span className="text-gray-400 dark:text-gray-600 italic">Nessuna descrizione</span>}
                       </p>
 
@@ -310,13 +314,13 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         onDelete={loadInterventi}
                       />
 
-                      {/* Pulsante Gestione Audio/Foto Completa */}
-                      <div className="mt-3">
+                      {/* Pulsante Gestione Audio/Foto - Responsive */}
+                      <div className="mt-2 sm:mt-3">
                         <button
                           onClick={() => setInterventoMediaAperto(
                             interventoMediaAperto === intervento.id ? null : intervento.id
                           )}
-                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                          className="flex items-center gap-2 text-xs sm:text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
                         >
                           <Camera size={14} />
                           <Mic size={14} />
@@ -329,9 +333,9 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         </button>
                       </div>
 
-                      {/* Sezione Gestione Media Completa (Upload, Audio, etc) */}
+                      {/* Sezione Gestione Media - Responsive */}
                       {interventoMediaAperto === intervento.id && (
-                        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="mt-3 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                           <InterventoMediaCapture 
                             interventoId={intervento.id}
                             onMediaUploaded={() => {
@@ -342,8 +346,8 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         </div>
                       )}
 
-                      {/* Info Fatturazione */}
-                      <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                      {/* Info Fatturazione - Responsive */}
+                      <div className="mt-2 sm:mt-3 flex flex-wrap gap-3 sm:gap-4 text-[10px] sm:text-xs">
                         <div>
                           <span className="text-gray-500 dark:text-gray-500">Addebitate:</span>
                           <span className="ml-1 font-semibold text-blue-600 dark:text-blue-400">
@@ -377,8 +381,8 @@ export default function InterventiTab({ ticket, onUpdate }) {
                       </div>
                     </div>
 
-                    {/* Pulsanti Azioni */}
-                    <div className="ml-4 flex gap-2">
+                    {/* Pulsanti Azioni - Responsive */}
+                    <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 flex-shrink-0">
                       {/* Pulsante Modifica */}
                       <button
                         onClick={() => {
@@ -388,7 +392,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                         title="Modifica intervento"
                       >
-                        <Edit2 size={18} />
+                        <Edit2 size={16} className="sm:w-[18px] sm:h-[18px]" />
                       </button>
                       
                       {/* Pulsante Elimina */}
@@ -397,7 +401,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                         title="Elimina intervento"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} className="sm:w-[18px] sm:h-[18px]" />
                       </button>
                     </div>
                   </div>

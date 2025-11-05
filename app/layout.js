@@ -4,6 +4,7 @@ import LayoutClient from '@/components/LayoutClient'
 import PWAInstaller from "@/components/PWAInstaller"
 // import ServiceWorkerRegister from "@/components/ServiceWorkerRegister" // ← COMMENTATO PER FIX 401
 import './globals.css'
+import './mobile-media-fixes.css' // ⬅️ Aggiungi questa riga
 
 export const metadata = {
   title: 'Odonto Service - Sistema Ticket',

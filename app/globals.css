@@ -93,3 +93,160 @@
   );
   background-size: 1000px 100%;
 }
+
+/* ================================
+   FIX RESPONSIVE TABS E CARDS
+   Aggiunto per fix mobile
+   ================================ */
+
+/* Smooth scroll ottimizzato */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* ================================
+   OTTIMIZZAZIONI MOBILE
+   ================================ */
+@media (max-width: 640px) {
+  /* Card interventi più compatte */
+  .bg-white.rounded-lg.border,
+  .bg-gray-50.rounded-lg.border {
+    padding: 0.75rem !important;
+  }
+  
+  /* Spacing ridotto tra elementi */
+  .space-y-4 > * + * {
+    margin-top: 0.75rem !important;
+  }
+  
+  /* Gap ottimizzati */
+  .gap-4 {
+    gap: 0.75rem !important;
+  }
+  
+  .gap-3 {
+    gap: 0.5rem !important;
+  }
+  
+  /* Font size adattivo */
+  .text-sm {
+    font-size: 0.8125rem !important;
+    line-height: 1.25rem !important;
+  }
+  
+  /* Badge più compatti */
+  .px-2 {
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+  }
+  
+  .py-1 {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+  
+  /* Pulsanti azioni più piccoli */
+  button[title] {
+    padding: 0.5rem !important;
+  }
+  
+  button[title] svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  
+  /* Tabs più compatte */
+  button[class*="gap-"] {
+    gap: 0.375rem !important;
+  }
+  
+  /* Padding ridotto per tabs */
+  button[class*="px-"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+}
+
+/* ================================
+   FIX MEDIA SU MOBILE
+   ================================ */
+@media (max-width: 640px) {
+  /* Sezioni trascrizioni e media più compatte */
+  .bg-green-50,
+  .bg-yellow-50 {
+    padding: 0.75rem !important;
+    margin: 0.5rem 0 !important;
+  }
+  
+  /* Audio player ottimizzato */
+  audio {
+    max-width: 100%;
+    height: 32px;
+  }
+  
+  /* Immagini responsive */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* ================================
+   FIX PER IOS SAFE AREA
+   ================================ */
+@supports (-webkit-touch-callout: none) {
+  .overflow-x-auto {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  
+  .sticky {
+    position: -webkit-sticky;
+    position: sticky;
+  }
+}
+
+/* ================================
+   FIX PER ANDROID (TOUCH TARGETS)
+   ================================ */
+@media (max-width: 640px) and (min-resolution: 2dppx) {
+  /* Touch target ottimizzati per Android */
+  button,
+  a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ================================
+   UTILITY CLASSES AGGIUNTIVE
+   ================================ */
+
+/* Testo troncato */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Break words per testi lunghi */
+.break-words {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Flex shrink per badge */
+.flex-shrink-0 {
+  flex-shrink: 0;
+}
+
+/* Min width 0 per evitare overflow in flex */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* Min width min per containers scrollabili */
+.min-w-min {
+  min-width: min-content;
+}

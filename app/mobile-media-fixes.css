@@ -1,0 +1,121 @@
+/* ================================================
+   FIX MOBILE MEDIA - VERSIONE CORRETTA
+   Solo elementi media, non tocca layout generale
+   ================================================ */
+
+/* ========================================
+   1. CARD TRASCRIZIONE GIALLA
+   ======================================== */
+
+/* Container trascrizione - SPECIFICO */
+div.bg-yellow-50.dark\:bg-yellow-900\/20,
+div.bg-orange-50.dark\:bg-orange-900\/20,
+div.bg-amber-50.dark\:bg-amber-900\/20 {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+/* Testo dentro card trascrizione - SPECIFICO */
+div.bg-yellow-50 > p,
+div.bg-yellow-50 > div,
+div.bg-orange-50 > p,
+div.bg-orange-50 > div {
+  word-wrap: break-word !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow: visible !important;
+  hyphens: auto !important;
+  -webkit-hyphens: auto !important;
+}
+
+/* ========================================
+   2. CONTAINER AUDIO (bg-gray-50)
+   ======================================== */
+
+/* Solo container audio all'interno del componente media */
+div.bg-gray-50.dark\:bg-gray-900.rounded-lg {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+/* Nome file audio lungo */
+div.bg-gray-50.dark\:bg-gray-900 > div > div > p.font-medium {
+  word-break: break-all !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  max-width: 100% !important;
+}
+
+/* ========================================
+   3. AUDIO PLAYER
+   ======================================== */
+
+/* Audio player element */
+audio {
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+audio::-webkit-media-controls-panel {
+  max-width: 100% !important;
+}
+
+/* ========================================
+   4. OTTIMIZZAZIONI MOBILE
+   ======================================== */
+
+@media (max-width: 640px) {
+  /* Card trascrizione compatta */
+  div.bg-yellow-50,
+  div.bg-orange-50 {
+    padding: 0.5rem !important;
+    margin: 0.5rem 0 !important;
+  }
+
+  /* Testo trascrizione più piccolo */
+  div.bg-yellow-50 > p,
+  div.bg-orange-50 > p {
+    font-size: 0.75rem !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Titolo trascrizione */
+  div.bg-yellow-50 > strong,
+  div.bg-orange-50 > strong {
+    font-size: 0.6875rem !important;
+    display: block !important;
+    margin-bottom: 0.375rem !important;
+  }
+
+  /* Audio player */
+  audio {
+    height: 36px !important;
+  }
+
+  /* Container audio compatto */
+  div.bg-gray-50.rounded-lg {
+    padding: 0.5rem !important;
+  }
+}
+
+/* ========================================
+   5. DARK MODE
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+  div.bg-yellow-50 {
+    background-color: rgba(254, 243, 199, 0.1) !important;
+  }
+}
+
+/* ================================================
+   FINE FIX - NON TOCCA LAYOUT GENERALE
+   ================================================ */
