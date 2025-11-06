@@ -7,7 +7,6 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import TicketActionsModal from '@/components/TicketActionsModal'
 import ContrattoModal from '@/components/ContrattoModal'
-import InfrastrutturaForm from '@/components/InfrastrutturaForm'
 
 export default function ClienteDettaglio() {
   const params = useParams()
@@ -16,7 +15,7 @@ export default function ClienteDettaglio() {
   const [contratti, setContratti] = useState([])
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('macchinari') // macchinari | ticket | contratti | infrastruttura
+  const [activeTab, setActiveTab] = useState('macchinari') // macchinari | ticket | contratti
   
   // Stati per modal ticket
   const [ticketSelezionato, setTicketSelezionato] = useState(null)
@@ -352,20 +351,24 @@ if (contrattiError) {
               </div>
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Sede Operativa</p>
-                <p className="font-medium text-gray-900 dark:text-white">{cliente.indirizzo}</p>
-                <p className="text-gray-600 dark:text-gray-400">{cliente.cap} {cliente.citta} ({cliente.provincia})</p>
+                {cliente.indirizzo && <p className="font-medium text-gray-900 dark:text-white">{cliente.indirizzo}</p>}
+                {(cliente.citta || cliente.cap) && (
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {cliente.cap} {cliente.citta} ({cliente.provincia})
+                  </p>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Tabs: Macchinari, Contratti, Ticket, Infrastruttura */}
+        {/* Tabs: Macchinari, Ticket e Contratti */}
         <div className="mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-t-xl shadow-sm border border-gray-200 dark:border-gray-700 border-b-0">
-            <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto scrollbar-hide">
+            <div className="flex border-b border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => setActiveTab('macchinari')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
+                className={`flex-1 px-6 py-4 font-medium transition-colors ${
                   activeTab === 'macchinari'
                     ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
@@ -378,7 +381,7 @@ if (contrattiError) {
               </button>
               <button
                 onClick={() => setActiveTab('contratti')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
+                className={`flex-1 px-6 py-4 font-medium transition-colors ${
                   activeTab === 'contratti'
                     ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
@@ -391,7 +394,7 @@ if (contrattiError) {
               </button>
               <button
                 onClick={() => setActiveTab('ticket')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
+                className={`flex-1 px-6 py-4 font-medium transition-colors ${
                   activeTab === 'ticket'
                     ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
@@ -400,19 +403,6 @@ if (contrattiError) {
                 <div className="flex items-center justify-center gap-2">
                   <Ticket size={18} />
                   <span>Ticket ({tickets.length})</span>
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('infrastruttura')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'infrastruttura'
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Settings size={18} />
-                  <span>Infrastruttura</span>
                 </div>
               </button>
             </div>
@@ -461,6 +451,24 @@ if (contrattiError) {
                               </p>
                             </div>
                           )}
+                          {macchinario.garanzia_scadenza && (
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Garanzia:</span>
+                              <p className="text-gray-900 dark:text-white">
+                                {new Date(macchinario.garanzia_scadenza).toLocaleDateString('it-IT')}
+                              </p>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-gray-500 dark:text-gray-400">Manutenzione:</span>
+                            <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                              macchinario.contratto_manutenzione === 'attivo'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                              {macchinario.contratto_manutenzione}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -508,76 +516,76 @@ if (contrattiError) {
                                   {contratto.stato.toUpperCase()}
                                 </span>
                                 {isInScadenza && contratto.stato === 'attivo' && (
-                                  <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                  <span className="px-2 py-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 rounded-full text-xs font-semibold">
                                     ⚠️ IN SCADENZA
                                   </span>
                                 )}
                               </div>
                               <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Contratto #{contratto.num_contratto} - {contratto.tipo_contratto}
+                                #{contratto.num_contratto} • {contratto.tipo_contratto}
                               </p>
                             </div>
 
-                            {/* Pulsanti Azioni */}
-                            <div className="flex items-center gap-2 ml-4">
+                            {/* Azioni */}
+                            <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleContrattoClick(contratto)}
-                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                                title="Visualizza"
+                                className="p-2 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                title="Visualizza dettagli"
                               >
-                                <Calendar size={18} />
+                                <FileText size={18} />
                               </button>
                               <button
                                 onClick={() => handleEditContratto(contratto)}
-                                className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-colors"
-                                title="Modifica"
+                                className="p-2 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                                title="Modifica contratto"
                               >
                                 <Edit2 size={18} />
                               </button>
                               <button
                                 onClick={() => handleDeleteContratto(contratto)}
-                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                title="Elimina"
+                                className="p-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                title="Elimina contratto"
                               >
                                 <Trash2 size={18} />
                               </button>
                             </div>
                           </div>
 
-                          {/* Info Contratto */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
+                          {/* Grid Info */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                             <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Data Inizio</span>
-                              <span className="text-gray-900 dark:text-white font-medium">
-                                {new Date(contratto.data_contratto).toLocaleDateString('it-IT')}
-                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Data Inizio</span>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {contratto.data_contratto 
+                                  ? new Date(contratto.data_contratto).toLocaleDateString('it-IT')
+                                  : 'N/D'}
+                              </p>
                             </div>
                             <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Data Scadenza</span>
-                              <span className={`font-medium ${
-                                isInScadenza && contratto.stato === 'attivo'
-                                  ? 'text-orange-600 dark:text-orange-400'
-                                  : 'text-gray-900 dark:text-white'
-                              }`}>
-                                {new Date(contratto.data_scadenza).toLocaleDateString('it-IT')}
-                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Data Scadenza</span>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {contratto.data_scadenza 
+                                  ? new Date(contratto.data_scadenza).toLocaleDateString('it-IT')
+                                  : 'N/D'}
+                              </p>
                             </div>
                             <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Valore Contratto</span>
-                              <span className="text-gray-900 dark:text-white font-medium">
-                                €{parseFloat(contratto.valore_contratto || 0).toFixed(2)}
-                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Sede</span>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {contratto.sede_riferimento || 'N/D'}
+                              </p>
                             </div>
                             <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Canone</span>
-                              <span className="text-gray-900 dark:text-white font-medium">
-                                €{parseFloat(contratto.canone_mensile || 0).toFixed(2)}/mese
-                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Tipo Contratto</span>
+                              <p className="font-medium text-gray-900 dark:text-white capitalize">
+                                {contratto.tipo_contratto || 'N/D'}
+                              </p>
                             </div>
                           </div>
 
                           {/* Progress Bar Ore */}
-                          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Ore Disponibili
@@ -750,11 +758,6 @@ if (contrattiError) {
                   </div>
                 )}
               </>
-            )}
-
-            {/* Tab Infrastruttura */}
-            {activeTab === 'infrastruttura' && (
-              <InfrastrutturaForm clienteId={params.id} />
             )}
           </div>
         </div>

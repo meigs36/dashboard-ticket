@@ -69,8 +69,12 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;  /* Chrome, Safari, Opera */
+  display: none;
 }
 
 /* Animazioni */
@@ -249,4 +253,129 @@
 /* Min width min per containers scrollabili */
 .min-w-min {
   min-width: min-content;
+}
+/* ==============================================
+   UTILITY CLASSES PER INFRASTRUTTURA CLIENTE
+   ============================================== */
+
+/* Nascondi scrollbar ma mantieni scroll funzionante */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
+
+/* Tab container con scroll orizzontale */
+.tab-scroll-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch; /* iOS smooth scroll */
+}
+
+/* Animazioni smooth per i tab */
+.tab-transition {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Focus visible per accessibilità */
+.tab-button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+/* Stile form compatto */
+.form-section-compact {
+  padding: 1rem; /* 16px */
+}
+
+.form-section-compact h3 {
+  margin-bottom: 0.75rem; /* 12px */
+  font-size: 0.875rem; /* 14px */
+}
+
+.form-section-compact input,
+.form-section-compact select,
+.form-section-compact textarea {
+  font-size: 0.875rem; /* 14px */
+  padding: 0.5rem 0.75rem; /* 8px 12px */
+}
+
+/* Radio button personalizzato */
+.radio-custom {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.radio-custom input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Checkbox personalizzato */
+.checkbox-custom {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-custom input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Grid responsive */
+@media (max-width: 768px) {
+  .form-grid-responsive {
+    grid-template-columns: 1fr;
+  }
+  
+  .tab-scroll-container {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Tab più compatti su mobile */
+  .tab-button {
+    padding: 0.75rem 1rem; /* 12px 16px */
+    font-size: 0.875rem; /* 14px */
+  }
+}
+
+/* Dark mode specifico */
+@media (prefers-color-scheme: dark) {
+  .form-section-compact {
+    background-color: rgba(31, 41, 55, 0.5);
+  }
+}
+
+/* Animazione per messaggio successo/errore */
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-alert {
+  animation: slideInDown 0.3s ease-out;
+}
+
+/* Fix per border radius nei tab */
+.tab-container-rounded {
+  border-top-left-radius: 0.75rem; /* 12px */
+  border-top-right-radius: 0.75rem; /* 12px */
+}
+
+.tab-content-rounded {
+  border-bottom-left-radius: 0.75rem; /* 12px */
+  border-bottom-right-radius: 0.75rem; /* 12px */
 }

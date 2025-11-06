@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { deleteAllegato } from '@/lib/mediaUpload' // ✅ IMPORTA LA FUNZIONE CORRETTA
 import { Image, Mic, Trash2, X, ZoomIn, ChevronDown, ChevronUp } from 'lucide-react'
 
 /**
- * ✅ InterventiAllegatiInline - VERSIONE SEMPLIFICATA
+ * ✅ InterventiAllegatiInline - VERSIONE CORRETTA
  * 
  * Features:
  * - 🎤 Audio player sempre visibili (SENZA trascrizione inline)
  * - 📸 Miniature foto cliccabili con lightbox
- * - 🗑️ Eliminazione con conferma
+ * - 🗑️ Eliminazione COMPLETA (database + storage)
  * - 🎨 Lightbox con sfondo verdino
  * 
- * NOTA: Le trascrizioni sono mostrate SOLO nel componente TrascrizioniSalvate
+ * FIX: Ora usa deleteAllegato() da mediaUpload.js per eliminare correttamente
  */
 export default function InterventiAllegatiInline({ interventoId, onDelete }) {
   const [allegati, setAllegati] = useState([])
   const [lightboxImage, setLightboxImage] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(null) // ✅ Stato per disabilitare pulsante durante eliminazione
   
   // 🔽 State per espansione sezioni (COLLASSATE di default)
   const [isAudioExpanded, setIsAudioExpanded] = useState(false)
@@ -53,34 +55,38 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
               signedUrl: urlData?.signedUrl
             }
           } catch (err) {
-            console.error('Errore creazione URL:', err)
-            return allegato
+            console.error('❌ Errore creazione URL per allegato:', allegato.id, err)
+            return {
+              ...allegato,
+              signedUrl: null // ✅ Previene crash se URL non generabile
+            }
           }
         })
       )
 
       setAllegati(allegatiConUrl)
     } catch (error) {
-      console.error('Errore caricamento allegati:', error)
+      console.error('❌ Errore caricamento allegati:', error)
+      alert('Errore durante il caricamento degli allegati')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // 🗑️ Eliminazione semplice
+  // ✅ FIX: Usa la funzione deleteAllegato da mediaUpload.js
   const handleDelete = async (allegatoId) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questo allegato?')) {
+    if (!window.confirm('Sei sicuro di voler eliminare questo allegato? Questa azione è irreversibile.')) {
       return
     }
 
     try {
-      const { error } = await supabase
-        .from('interventi_allegati')
-        .delete()
-        .eq('id', allegatoId)
+      setIsDeleting(allegatoId)
+      
+      // ✅ USA LA FUNZIONE CORRETTA che elimina sia database che storage
+      await deleteAllegato(allegatoId)
 
-      if (error) throw error
-
+      console.log('✅ Allegato eliminato con successo:', allegatoId)
+      
       // Ricarica gli allegati
       await loadAllegati()
       
@@ -88,9 +94,14 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
       if (onDelete) {
         onDelete()
       }
+
+      alert('✅ Allegato eliminato con successo')
+      
     } catch (error) {
-      console.error('Errore eliminazione allegato:', error)
-      alert('Errore durante l\'eliminazione')
+      console.error('❌ Errore eliminazione allegato:', error)
+      alert('❌ Errore durante l\'eliminazione: ' + error.message)
+    } finally {
+      setIsDeleting(null)
     }
   }
 
@@ -133,92 +144,92 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
             )}
           </div>
 
-          {/* Contenuto collassabile */}
+          {/* Lista audio collassabile */}
           {isAudioExpanded && (
-            <div className="space-y-3">
-            {audio.map((aud) => (
-              <div
-                key={aud.id}
-                className="bg-white/80 rounded-lg p-3 border border-purple-200 hover:border-purple-400 transition-colors"
-              >
-                <div className="flex items-start gap-3">
-                  <Mic className="text-purple-500 mt-1 flex-shrink-0" size={16} />
-                  
-                  <div className="flex-1 min-w-0 w-full">
-                    {/* Filename e data */}
-                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                      <span className="text-xs font-medium text-gray-700 break-all">
+            <div className="space-y-2">
+              {audio.map((aud) => (
+                <div 
+                  key={aud.id} 
+                  className="bg-white rounded-lg p-3 border border-purple-200 hover:border-purple-300 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      {/* Nome file */}
+                      <p className="text-xs font-medium text-gray-700 truncate mb-1">
                         {aud.nome_file}
-                      </span>
-                      <span className="text-xs text-gray-500 flex-shrink-0">
-                        {new Date(aud.caricato_il).toLocaleString('it-IT', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
+                      </p>
+
+                      {/* Player audio */}
+                      {aud.signedUrl ? (
+                        <audio 
+                          controls 
+                          className="w-full h-8"
+                          preload="metadata"
+                        >
+                          <source src={aud.signedUrl} type={aud.mime_type || 'audio/webm'} />
+                          Il tuo browser non supporta l'audio.
+                        </audio>
+                      ) : (
+                        <div className="p-2 bg-red-50 border border-red-200 rounded">
+                          <p className="text-xs text-red-600">
+                            ⚠️ Audio non disponibile (URL scaduto o file mancante)
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Info durata se disponibile */}
+                      {aud.durata_secondi && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Durata: {Math.floor(aud.durata_secondi / 60)}:{(aud.durata_secondi % 60).toString().padStart(2, '0')}
+                        </p>
+                      )}
+
+                      {/* Stato trascrizione (informativo) */}
+                      {aud.trascrizione_stato === 'processing' && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                          <p className="text-xs text-blue-600">
+                            ⏳ Trascrizione in corso...
+                          </p>
+                        </div>
+                      )}
+
+                      {aud.trascrizione_stato === 'completed' && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                          <p className="text-xs text-green-600">
+                            ✅ Trascrizione completata - Vedi sopra in "Trascrizioni Salvate"
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Errore trascrizione */}
+                      {aud.trascrizione_errore && (
+                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                          <p className="text-xs text-red-600">
+                            ⚠️ Errore trascrizione: {aud.trascrizione_errore}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Audio Player */}
-                    {aud.signedUrl && (
-                      <audio
-                        controls
-                        className="w-full max-w-full"
-                        style={{ height: '32px' }}
-                        preload="metadata"
-                      >
-                        <source src={aud.signedUrl} type={aud.mime_type || 'audio/webm'} />
-                        Il tuo browser non supporta la riproduzione audio.
-                      </audio>
-                    )}
-
-                    {/* Info durata se disponibile */}
-                    {aud.durata_secondi && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Durata: {Math.floor(aud.durata_secondi / 60)}:{(aud.durata_secondi % 60).toString().padStart(2, '0')}
-                      </p>
-                    )}
-
-                    {/* Stato trascrizione (informativo) */}
-                    {aud.trascrizione_stato === 'processing' && (
-                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                        <p className="text-xs text-blue-600">
-                          ⏳ Trascrizione in corso...
-                        </p>
-                      </div>
-                    )}
-
-                    {aud.trascrizione_stato === 'completed' && (
-                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                        <p className="text-xs text-green-600">
-                          ✅ Trascrizione completata - Vedi sopra in "Trascrizioni Salvate"
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Errore trascrizione */}
-                    {aud.trascrizione_errore && (
-                      <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-                        <p className="text-xs text-red-600">
-                          ⚠️ Errore trascrizione: {aud.trascrizione_errore}
-                        </p>
-                      </div>
-                    )}
+                    {/* Pulsante elimina */}
+                    <button
+                      onClick={() => handleDelete(aud.id)}
+                      disabled={isDeleting === aud.id}
+                      className={`p-1.5 hover:bg-red-100 rounded transition-colors flex-shrink-0 ${
+                        isDeleting === aud.id ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      title="Elimina audio"
+                    >
+                      {isDeleting === aud.id ? (
+                        <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <Trash2 className="text-red-500" size={14} />
+                      )}
+                    </button>
                   </div>
-
-                  {/* Pulsante elimina */}
-                  <button
-                    onClick={() => handleDelete(aud.id)}
-                    className="p-1.5 hover:bg-red-100 rounded transition-colors flex-shrink-0"
-                    title="Elimina audio"
-                  >
-                    <Trash2 className="text-red-500" size={14} />
-                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -254,28 +265,45 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
                   className="relative group bg-white rounded-lg overflow-hidden border border-blue-200 hover:border-blue-400 transition-all aspect-square"
                 >
                   {/* Miniatura */}
-                  <img
-                    src={img.signedUrl}
-                    alt={img.nome_file}
-                    className="w-full h-full object-cover cursor-pointer"
-                    onClick={() => setLightboxImage(img)}
-                  />
+                  {img.signedUrl ? (
+                    <img
+                      src={img.signedUrl}
+                      alt={img.nome_file}
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => setLightboxImage(img)}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                      <p className="text-xs text-red-600 p-2 text-center">
+                        Foto non disponibile
+                      </p>
+                    </div>
+                  )}
 
                   {/* Overlay hover con icone */}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => setLightboxImage(img)}
-                      className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                      title="Ingrandisci"
-                    >
-                      <ZoomIn size={16} className="text-blue-600" />
-                    </button>
+                    {img.signedUrl && (
+                      <button
+                        onClick={() => setLightboxImage(img)}
+                        className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                        title="Ingrandisci"
+                      >
+                        <ZoomIn size={16} className="text-blue-600" />
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(img.id)}
-                      className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                      disabled={isDeleting === img.id}
+                      className={`p-2 bg-white rounded-full hover:bg-gray-100 transition-colors ${
+                        isDeleting === img.id ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                       title="Elimina"
                     >
-                      <Trash2 size={16} className="text-red-500" />
+                      {isDeleting === img.id ? (
+                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <Trash2 size={16} className="text-red-500" />
+                      )}
                     </button>
                   </div>
 
@@ -307,12 +335,18 @@ export default function InterventiAllegatiInline({ interventoId, onDelete }) {
             </button>
 
             {/* Immagine grande */}
-            <img
-              src={lightboxImage.signedUrl}
-              alt={lightboxImage.nome_file}
-              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
+            {lightboxImage.signedUrl ? (
+              <img
+                src={lightboxImage.signedUrl}
+                alt={lightboxImage.nome_file}
+                className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <div className="bg-white p-8 rounded-lg">
+                <p className="text-red-600">Immagine non disponibile</p>
+              </div>
+            )}
 
             {/* Info foto */}
             <div className="absolute -bottom-16 left-0 right-0 bg-white/90 p-3 rounded-lg">
