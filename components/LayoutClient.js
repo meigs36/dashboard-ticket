@@ -6,8 +6,15 @@ import Navbar from '@/components/Navbar'
 export default function LayoutClient({ children }) {
   const pathname = usePathname()
   
-  // Pagine dove NON mostrare la navbar
-  const pagineSenzaNavbar = ['/login', '/signup', '/reset-password', '/auth']
+  // ✅ Pagine dove NON mostrare la navbar
+  const pagineSenzaNavbar = [
+    '/login', 
+    '/signup', 
+    '/reset-password', 
+    '/auth',
+    '/portal'  // ⬅️ AGGIUNGI QUESTA RIGA
+  ]
+  
   const mostraNavbar = !pagineSenzaNavbar.some(path => pathname?.startsWith(path))
 
   return (
