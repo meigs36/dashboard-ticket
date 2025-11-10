@@ -2,35 +2,75 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
+import { supabase } from '@/lib/supabase'
 import CustomerOnboardingWizard from '@/components/CustomerOnboardingWizard'
+import toast from 'react-hot-toast'
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const { user, customerProfile, loading: authLoading } = useCustomerAuth()
   const [loading, setLoading] = useState(true)
-  const [cliente, setCliente] = useState(null)
   
   useEffect(() => {
-    // Per ora mock - in futuro verificherà autenticazione
-    loadMockCliente()
-  }, [])
+    // Verifica autenticazione
+    if (!authLoading) {
+      if (!user || !customerProfile) {
+        toast.error('Devi effettuare il login')
+        router.push('/portal')
+      } else {
+        setLoading(false)
+      }
+    }
+  }, [user, customerProfile, authLoading, router])
   
-  function loadMockCliente() {
-    // Simula caricamento cliente
-    setTimeout(() => {
-      setCliente({
-        id: 'mock-cliente-id',
-        ragione_sociale: 'Cliente Test'
+  async function handleComplete(wizardData) {
+    try {
+      console.log('💾 Salvataggio dati onboarding...', wizardData)
+      
+      // Ottieni token per autenticazione API
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Sessione non valida')
+      }
+
+      // Chiama API per salvare dati
+      const response = await fetch('/api/customer/onboarding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          datiAziendali: wizardData.datiAziendali,
+          referenti: wizardData.referenti,
+          macchinari: wizardData.macchinari,
+          documenti: wizardData.documenti
+        })
       })
-      setLoading(false)
-    }, 500)
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Errore durante il salvataggio')
+      }
+
+      console.log('✅ Onboarding salvato con successo:', result)
+      
+      toast.success('Onboarding completato con successo!')
+      
+      // Attendi un momento per vedere il toast
+      setTimeout(() => {
+        router.push('/portal/dashboard')
+      }, 1500)
+      
+    } catch (error) {
+      console.error('❌ Errore salvataggio onboarding:', error)
+      toast.error(error.message || 'Errore durante il salvataggio. Riprova.')
+    }
   }
   
-  function handleComplete() {
-    alert('✅ Onboarding completato! In produzione, verrai reindirizzato alla dashboard.')
-    // In futuro: router.push('/portal/dashboard')
-  }
-  
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -41,25 +81,13 @@ export default function OnboardingPage() {
     )
   }
   
-  if (!cliente) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">Errore caricamento dati cliente</p>
-          <button
-            onClick={() => router.push('/portal')}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Torna alla home
-          </button>
-        </div>
-      </div>
-    )
+  if (!user || !customerProfile) {
+    return null // Redirect gestito da useEffect
   }
   
   return (
     <CustomerOnboardingWizard
-      clienteId={cliente.id}
+      clienteId={customerProfile.id}
       onComplete={handleComplete}
     />
   )
