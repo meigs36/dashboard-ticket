@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAudioRecorder } from '@/hooks/useAudioRecorder'
 import { usePhotoCapture } from '@/hooks/usePhotoCapture'
+import ErrorAlert from './ErrorAlert'
 import {
   uploadAudio,
   uploadPhoto,
@@ -38,6 +39,8 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
     recordingTime,
     audioBlob,
     audioUrl,
+    error,          // ✅ NUOVO: stato errore
+    clearError,     // ✅ NUOVO: funzione per pulire errore
     startRecording,
     pauseRecording,
     resumeRecording,
@@ -229,7 +232,16 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
       <div className="p-3 sm:p-6">
         {/* TAB REGISTRA AUDIO */}
         {activeTab === 'registra-audio' && (
-          <div className="space-y-4 sm:space-y-6">
+  <div className="space-y-4 sm:space-y-6">
+    
+    {/* ✅ NUOVO: Mostra errore se presente */}
+    {error && (
+      <ErrorAlert 
+        error={error} 
+        onClose={clearError}
+        className="mb-4"
+      />
+    )}
             <div className="text-center">
               {!isRecording && !audioBlob && (
                 <button

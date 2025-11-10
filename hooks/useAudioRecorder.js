@@ -1,4 +1,4 @@
-// hooks/useAudioRecorder.js - FIX iOS PWA COMPLETO
+// hooks/useAudioRecorder.js - VERSIONE NON-BLOCCANTE
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -9,6 +9,7 @@ export function useAudioRecorder() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
+  const [error, setError] = useState(null); // ✅ NUOVO: stato per errori
   
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -75,7 +76,7 @@ export function useAudioRecorder() {
     };
   }, [isIOS]);
 
-  // 🔧 FIX PRINCIPALE: Unlock audio context DOPO aver ottenuto lo stream
+  // Unlock audio context DOPO aver ottenuto lo stream
   const unlockAudioContext = useCallback(async () => {
     try {
       if (!audioContextRef.current) {
@@ -92,7 +93,12 @@ export function useAudioRecorder() {
     }
   }, []);
 
-  // 🎙️ START RECORDING - VERSIONE CORRETTA PER iOS
+  // ✅ FUNZIONE PER PULIRE L'ERRORE
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  // 🎙️ START RECORDING - VERSIONE CORRETTA E NON-BLOCCANTE
   const startRecording = useCallback(async () => {
     try {
       console.log('🎙️ Avvio registrazione...');
@@ -100,6 +106,7 @@ export function useAudioRecorder() {
       console.log('📱 Standalone:', isStandalone());
 
       // Reset stato
+      setError(null); // Pulisce errori precedenti
       chunksRef.current = [];
       setRecordingTime(0);
       setAudioBlob(null);
@@ -116,7 +123,6 @@ export function useAudioRecorder() {
       console.log('✅ Stream ottenuto:', stream.getAudioTracks()[0].getSettings());
 
       // ✅ SOLO DOPO aver ottenuto lo stream, facciamo l'unlock del context
-      // Questo non perde la user gesture perché lo stream è già stato autorizzato
       if (isIOS() && isStandalone()) {
         await unlockAudioContext();
       }
@@ -157,6 +163,7 @@ export function useAudioRecorder() {
           console.log('🔗 URL creato:', url);
         } else {
           console.error('❌ Nessun chunk audio registrato!');
+          setError('Nessun audio registrato. Riprova.');
         }
         
         // Ferma tutti i track
@@ -181,36 +188,37 @@ export function useAudioRecorder() {
     } catch (error) {
       console.error('❌ Errore avvio registrazione:', error);
       
-      // Messaggi di errore specifici per iOS
+      // ✅ FIX: Non usiamo alert() - impostiamo solo lo stato errore
+      let errorMessage = 'Errore sconosciuto durante l\'avvio della registrazione';
+      
       if (error.name === 'NotAllowedError') {
         if (isIOS() && isStandalone()) {
-          alert(
-            '⚠️ Permessi microfono necessari!\n\n' +
+          errorMessage = 
+            '🎙️ Permessi microfono necessari!\n\n' +
             'Per registrare in modalità app:\n' +
             '1. Vai in Impostazioni > Safari > Microfono\n' +
             '2. Abilita l\'accesso per questo sito\n' +
-            '3. Riapri l\'app dalla Home\n\n' +
-            'OPPURE apri l\'app in Safari (non dalla Home)'
-          );
+            '3. Riapri l\'app dalla Home';
         } else if (isIOS()) {
-          alert(
-            '⚠️ Permessi microfono negati\n\n' +
+          errorMessage = 
+            '🎙️ Permessi microfono negati\n\n' +
             'Vai in Impostazioni > Safari > Microfono\n' +
-            'e abilita l\'accesso per questo sito'
-          );
+            'e abilita l\'accesso per questo sito';
         } else {
-          alert('⚠️ Permessi microfono negati. Controlla le impostazioni del browser.');
+          errorMessage = '🎙️ Permessi microfono negati. Controlla le impostazioni del browser.';
         }
       } else if (error.name === 'NotFoundError') {
-        alert('⚠️ Nessun microfono trovato sul dispositivo.');
+        errorMessage = '🎙️ Nessun microfono trovato sul dispositivo.';
       } else if (error.name === 'NotReadableError') {
-        alert(
-          '⚠️ Microfono già in uso da un\'altra app.\n\n' +
-          'Chiudi altre app che potrebbero usare il microfono e riprova.'
-        );
+        errorMessage = 
+          '🎙️ Microfono già in uso\n\n' +
+          'Chiudi altre app che potrebbero usare il microfono e riprova.';
       } else {
-        alert('❌ Errore avvio registrazione: ' + error.message);
+        errorMessage = `🎙️ Errore: ${error.message}`;
       }
+      
+      // ✅ Imposta errore nello stato invece di alert bloccante
+      setError(errorMessage);
       
       // Cleanup in caso di errore
       if (streamRef.current) {
@@ -218,7 +226,7 @@ export function useAudioRecorder() {
         streamRef.current = null;
       }
       
-      throw error;
+      // NON facciamo throw - lasciamo che l'UI gestisca l'errore
     }
   }, [isIOS, isStandalone, getAudioConstraints, getSupportedMimeType, unlockAudioContext]);
 
@@ -271,6 +279,7 @@ export function useAudioRecorder() {
     setAudioBlob(null);
     setAudioUrl(null);
     setRecordingTime(0);
+    setError(null); // ✅ Pulisce anche errori
     chunksRef.current = [];
   }, [isRecording, stopRecording, audioUrl]);
 
@@ -302,6 +311,8 @@ export function useAudioRecorder() {
     recordingTimeRaw: recordingTime,
     audioBlob,
     audioUrl,
+    error, // ✅ NUOVO: espone errori
+    clearError, // ✅ NUOVO: funzione per pulire errori
     startRecording,
     pauseRecording,
     resumeRecording,
