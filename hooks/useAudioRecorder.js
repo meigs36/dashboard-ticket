@@ -1,4 +1,4 @@
-// hooks/useAudioRecorder.js - FIX iOS PWA STANDALONE
+// hooks/useAudioRecorder.js - FIX iOS PWA COMPLETO
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -16,42 +16,18 @@ export function useAudioRecorder() {
   const streamRef = useRef(null);
   const audioContextRef = useRef(null);
 
-  // === FIX iOS PWA: Rileva standalone mode ===
+  // Rileva iOS
+  const isIOS = useCallback(() => {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  }, []);
+
+  // Rileva standalone mode (PWA)
   const isStandalone = useCallback(() => {
     return window.matchMedia('(display-mode: standalone)').matches ||
            window.navigator.standalone === true;
   }, []);
 
-  const isIOS = useCallback(() => {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  }, []);
-
-  // === FIX iOS PWA: Unlock audio context ===
-  useEffect(() => {
-    if (isIOS() && isStandalone()) {
-      console.log('📱 PWA iOS Standalone mode - Unlock audio context');
-      unlockAudioContext();
-    }
-  }, []);
-
-  async function unlockAudioContext() {
-    try {
-      // Crea audio context se non esiste
-      if (!audioContextRef.current) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioContextRef.current = new AudioContext();
-      }
-
-      // Resume se sospeso
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-        console.log('✅ Audio context sbloccato');
-      }
-    } catch (error) {
-      console.error('❌ Errore unlock audio context:', error);
-    }
-  }
-
+  // MIME type ottimale per iOS
   const getSupportedMimeType = useCallback(() => {
     if (isIOS()) {
       console.log('📱 iOS rilevato - uso audio/mp4');
@@ -76,6 +52,7 @@ export function useAudioRecorder() {
     return '';
   }, [isIOS]);
 
+  // Constraints audio ottimizzate per iOS
   const getAudioConstraints = useCallback(() => {
     if (isIOS()) {
       return {
@@ -98,50 +75,31 @@ export function useAudioRecorder() {
     };
   }, [isIOS]);
 
-  // === FIX iOS PWA: Richiedi permessi esplicitamente ===
-  const requestPermissions = useCallback(async () => {
-    if (!isIOS() || !isStandalone()) {
-      return true; // Non serve in altri contesti
-    }
-
-    console.log('🔐 PWA iOS: Richiesta permessi esplicita');
-
+  // 🔧 FIX PRINCIPALE: Unlock audio context DOPO aver ottenuto lo stream
+  const unlockAudioContext = useCallback(async () => {
     try {
-      // Test se i permessi sono già stati dati
-      const constraints = getAudioConstraints();
-      const testStream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      // Se arriviamo qui, i permessi ci sono
-      testStream.getTracks().forEach(track => track.stop());
-      console.log('✅ Permessi microfono già concessi');
-      return true;
-    } catch (error) {
-      if (error.name === 'NotAllowedError') {
-        console.error('❌ Permessi microfono negati');
-        alert('⚠️ Permessi microfono richiesti!\n\nPer registrare audio in modalità app:\n1. Vai in Impostazioni > Safari > Microfono\n2. Abilita accesso per questo sito\n3. Riapri l\'app');
-        return false;
+      if (!audioContextRef.current) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContextRef.current = new AudioContext();
       }
-      throw error;
-    }
-  }, [isIOS, isStandalone, getAudioConstraints]);
 
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+        console.log('✅ Audio context sbloccato');
+      }
+    } catch (error) {
+      console.error('❌ Errore unlock audio context:', error);
+    }
+  }, []);
+
+  // 🎙️ START RECORDING - VERSIONE CORRETTA PER iOS
   const startRecording = useCallback(async () => {
     try {
       console.log('🎙️ Avvio registrazione...');
       console.log('📱 iOS:', isIOS());
       console.log('📱 Standalone:', isStandalone());
 
-      // === FIX iOS PWA: Unlock audio prima di registrare ===
-      if (isIOS() && isStandalone()) {
-        await unlockAudioContext();
-        
-        // Richiedi permessi esplicitamente
-        const hasPermissions = await requestPermissions();
-        if (!hasPermissions) {
-          return;
-        }
-      }
-
+      // Reset stato
       chunksRef.current = [];
       setRecordingTime(0);
       setAudioBlob(null);
@@ -150,10 +108,18 @@ export function useAudioRecorder() {
       const constraints = getAudioConstraints();
       console.log('🔧 Constraints:', constraints);
       
+      // ⚡ FIX iOS: Chiamiamo getUserMedia IMMEDIATAMENTE
+      // senza altre chiamate async prima, per mantenere la user gesture
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
       console.log('✅ Stream ottenuto:', stream.getAudioTracks()[0].getSettings());
+
+      // ✅ SOLO DOPO aver ottenuto lo stream, facciamo l'unlock del context
+      // Questo non perde la user gesture perché lo stream è già stato autorizzato
+      if (isIOS() && isStandalone()) {
+        await unlockAudioContext();
+      }
 
       const mimeType = getSupportedMimeType();
       console.log('🎵 MIME Type:', mimeType);
@@ -193,18 +159,21 @@ export function useAudioRecorder() {
           console.error('❌ Nessun chunk audio registrato!');
         }
         
+        // Ferma tutti i track
         streamRef.current?.getTracks().forEach(track => {
           track.stop();
           console.log('🛑 Track fermato:', track.kind);
         });
       };
 
+      // iOS richiede timeslice più grande per evitare problemi
       const timeslice = isIOS() ? 1000 : 100;
       mediaRecorder.start(timeslice);
       
       console.log('🔴 Registrazione avviata con timeslice:', timeslice, 'ms');
       setIsRecording(true);
 
+      // Avvia timer
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -212,18 +181,38 @@ export function useAudioRecorder() {
     } catch (error) {
       console.error('❌ Errore avvio registrazione:', error);
       
+      // Messaggi di errore specifici per iOS
       if (error.name === 'NotAllowedError') {
         if (isIOS() && isStandalone()) {
-          alert('⚠️ Permessi microfono non disponibili in modalità app.\n\nSoluzione:\n1. Apri l\'app in Safari (non dalla Home)\n2. Oppure vai in Impostazioni iOS > Safari > Microfono');
+          alert(
+            '⚠️ Permessi microfono necessari!\n\n' +
+            'Per registrare in modalità app:\n' +
+            '1. Vai in Impostazioni > Safari > Microfono\n' +
+            '2. Abilita l\'accesso per questo sito\n' +
+            '3. Riapri l\'app dalla Home\n\n' +
+            'OPPURE apri l\'app in Safari (non dalla Home)'
+          );
+        } else if (isIOS()) {
+          alert(
+            '⚠️ Permessi microfono negati\n\n' +
+            'Vai in Impostazioni > Safari > Microfono\n' +
+            'e abilita l\'accesso per questo sito'
+          );
         } else {
-          alert('⚠️ Permessi microfono negati. Vai in Impostazioni > Safari > Microfono e abilita l\'accesso.');
+          alert('⚠️ Permessi microfono negati. Controlla le impostazioni del browser.');
         }
       } else if (error.name === 'NotFoundError') {
         alert('⚠️ Nessun microfono trovato sul dispositivo.');
+      } else if (error.name === 'NotReadableError') {
+        alert(
+          '⚠️ Microfono già in uso da un\'altra app.\n\n' +
+          'Chiudi altre app che potrebbero usare il microfono e riprova.'
+        );
       } else {
         alert('❌ Errore avvio registrazione: ' + error.message);
       }
       
+      // Cleanup in caso di errore
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -231,7 +220,7 @@ export function useAudioRecorder() {
       
       throw error;
     }
-  }, [isIOS, isStandalone, getAudioConstraints, getSupportedMimeType, requestPermissions]);
+  }, [isIOS, isStandalone, getAudioConstraints, getSupportedMimeType, unlockAudioContext]);
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
@@ -290,6 +279,21 @@ export function useAudioRecorder() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Cleanup al unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
 
   return {
     isRecording,

@@ -1,32 +1,50 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useCustomerAuth } from '@/contexts/CustomerAuthContext';
+import toast from 'react-hot-toast';
 
 export default function CustomerPortalLanding() {
   const router = useRouter();
+  const { signIn, user, customerProfile, loading: authLoading, needsOnboarding } = useCustomerAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [error, setError] = useState('');
+
+  // Redirect se già loggato
+  useEffect(() => {
+    if (!authLoading && user && customerProfile) {
+      if (needsOnboarding) {
+        router.push('/portal/onboarding');
+      } else {
+        router.push('/portal/dashboard');
+      }
+    }
+  }, [user, customerProfile, authLoading, needsOnboarding, router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
     try {
-      // TODO: Implementare autenticazione Supabase
-      console.log('Login:', { email, password });
+      const { data, error: loginError } = await signIn(email, password);
       
-      // Mock delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Redirect to dashboard (mock)
-      alert('Login effettuato! (mock)');
-      router.push('/portal/dashboard');
+      if (loginError) {
+        throw loginError;
+      }
+
+      if (data?.user) {
+        toast.success('Login effettuato con successo!');
+        // Il redirect è gestito dall'useEffect sopra
+      }
     } catch (error) {
       console.error('Errore login:', error);
-      alert('Credenziali non valide');
+      setError(error.message || 'Credenziali non valide. Riprova.');
+      toast.error('Credenziali non valide');
     } finally {
       setIsLoading(false);
     }
@@ -107,6 +125,12 @@ export default function CustomerPortalLanding() {
               </div>
 
               <form onSubmit={handleLogin} className="space-y-5">
+                {error && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-600">{error}</p>
+                  </div>
+                )}
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email
