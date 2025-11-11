@@ -424,12 +424,12 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                   )}
                 </span>
                 <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoInput}
-                  className="hidden"
-                />
+  type="file"
+  accept="image/*"
+  multiple
+  onChange={handlePhotoInput}
+  className="hidden"
+/>
               </label>
 
               <p className="mt-3 text-xs sm:text-sm text-gray-500">
@@ -443,14 +443,14 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
                   {photos.map((photo, index) => (
                     <div key={index} className="relative aspect-square group">
                       <img
-                        src={photo.preview}
-                        alt={`Foto ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg"
-                      />
+  src={photo.preview}  // ✅ Usa preview invece di url
+  alt={`Foto ${index + 1}`}
+  className="w-full h-full object-cover rounded-lg"
+/>
                       <button
-                        onClick={() => removePhoto(photo.id)}
-                        className="absolute top-1 right-1 sm:top-2 sm:right-2 p-1.5 sm:p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
+  onClick={() => removePhoto(photo.id)}  // ✅ Passa ID del photo
+  className="absolute top-1 right-1 sm:top-2 sm:right-2 p-1.5 sm:p-2 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+>
                         <Trash2 size={14} className="sm:w-4 sm:h-4" />
                       </button>
                     </div>

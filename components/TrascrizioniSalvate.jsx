@@ -157,7 +157,7 @@ export default function TrascrizioniSalvate({ interventoId, onUpdate }) {
             📝 Trascrizioni Salvate
           </span>
           <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
-            {trascrizioni.split('\n🎤').length - 1 || 1} registrazione/i
+            {(trascrizioni.match(/🎤/g) || []).length} registrazione/i
           </span>
         </div>
 
