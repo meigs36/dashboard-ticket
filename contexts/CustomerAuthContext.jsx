@@ -43,6 +43,13 @@ export function CustomerAuthProvider({ children }) {
             setUser(session.user)
           }
         }
+        else if (event === 'INITIAL_SESSION') {
+          console.log('🔑 Customer Auth event: INITIAL_SESSION')
+          if (session?.user) {
+            setUser(session.user)
+            await loadCustomerProfile(session.user.id)
+          }
+        }
       }
     )
 
@@ -90,66 +97,108 @@ export function CustomerAuthProvider({ children }) {
     try {
       console.log('📊 Caricamento profilo cliente:', userId)
       
-      // Cerca in customer_portal_users (non in utenti!)
-      const { data, error } = await supabase
+      // ✅ QUERY CORRETTA: Cerca in customer_portal_users
+      const { data: customerUser, error: userError } = await supabase
         .from('customer_portal_users')
-        .select('*')
+        .select(`
+          *,
+          cliente:clienti(*)
+        `)
         .eq('id', userId)
-        .single()
+        .maybeSingle() // Usa maybeSingle per evitare errori se non esiste
 
-      if (error) {
-        console.error('❌ Profilo cliente non trovato:', error.message)
+      if (userError) {
+        console.error('❌ Profilo non trovato nel DB:', userError)
         
-        // Verifica se utente esiste in auth
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-        
-        if (!authError && authUser) {
-          // Profilo virtuale temporaneo
-          const virtualProfile = {
-            id: authUser.id,
-            email: authUser.email,
-            ragione_sociale: authUser.email.split('@')[0],
-            _isVirtual: true,
-            _needsOnboarding: true
-          }
-          console.log('⚠️ Usando profilo virtuale cliente (onboarding necessario)')
-          setCustomerProfile(virtualProfile)
-        }
+        // Se il profilo non esiste, potrebbe essere un nuovo utente
+        // che deve completare l'onboarding
+        console.log('⚠️ Usando profilo virtuale temporaneo')
+        setCustomerProfile({
+          id: userId,
+          _needsOnboarding: true,
+          _isVirtual: true
+        })
         return
       }
 
-      console.log('✅ Profilo cliente caricato:', data.ragione_sociale)
-      setCustomerProfile(data)
+      if (!customerUser) {
+        console.error('❌ Customer user data è null')
+        setCustomerProfile(null)
+        return
+      }
+
+      console.log('✅ Profilo cliente caricato:', customerUser)
       
-      // Verifica se onboarding completato
-      await checkOnboardingStatus(data.id)
+      // Verifica se ha accesso attivo
+      if (!customerUser.attivo) {
+        console.error('❌ Account cliente disattivato')
+        setCustomerProfile(null)
+        router.push('/portal/unauthorized')
+        return
+      }
+
+      // Combina i dati
+      const profile = {
+        ...customerUser,
+        // Dati aziendali dal gestionale (tabella clienti)
+        ragione_sociale: customerUser.cliente?.ragione_sociale || customerUser.ragione_sociale,
+        partita_iva: customerUser.cliente?.partita_iva,
+        codice_fiscale: customerUser.cliente?.codice_fiscale,
+        indirizzo: customerUser.cliente?.indirizzo,
+        citta: customerUser.cliente?.citta,
+        cap: customerUser.cliente?.cap,
+        provincia: customerUser.cliente?.provincia,
+        telefono: customerUser.cliente?.telefono || customerUser.telefono,
+        email: customerUser.email,
+        pec: customerUser.cliente?.pec,
+        // Metadata
+        cliente_id: customerUser.cliente_id,
+        onboarding_completato: customerUser.cliente?.onboarding_completato || false
+      }
+
+      setCustomerProfile(profile)
       
+      // Verifica stato onboarding
+      await checkOnboardingStatus(userId, customerUser.cliente_id)
+
     } catch (error) {
       console.error('❌ Errore caricamento profilo cliente:', error)
+      setCustomerProfile(null)
     }
   }
 
-  async function checkOnboardingStatus(customerId) {
+  async function checkOnboardingStatus(userId, clienteId) {
     try {
+      // Verifica se esiste un record nella tabella customer_onboarding_status
       const { data, error } = await supabase
         .from('customer_onboarding_status')
         .select('*')
-        .eq('customer_id', customerId)
-        .single()
-
-      if (error || !data) {
-        console.log('⚠️ Onboarding status non trovato, necessario completare')
-        setCustomerProfile(prev => ({ ...prev, _needsOnboarding: true }))
+        .eq('cliente_id', clienteId)
+        .maybeSingle() // Usa maybeSingle invece di single per evitare errore se non esiste
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found (ok)
+        console.error('❌ Errore check onboarding:', error)
         return
       }
 
-      // Verifica completamento
+      if (!data) {
+        console.log('⚠️ Onboarding status non trovato, necessario completare')
+        setCustomerProfile(prev => ({ 
+          ...prev, 
+          _needsOnboarding: true,
+          _onboardingStatus: null
+        }))
+        return
+      }
+
+      // Controlla se tutti gli step sono completati
       const isComplete = data.dati_aziendali_completati && 
                         data.referenti_completati && 
                         data.macchinari_completati &&
                         data.documenti_completati
 
       console.log('📋 Onboarding status:', isComplete ? 'Completato' : 'Da completare')
+      
       setCustomerProfile(prev => ({ 
         ...prev, 
         _needsOnboarding: !isComplete,
@@ -209,7 +258,6 @@ export function CustomerAuthProvider({ children }) {
         password,
         options: {
           data: {
-            ragione_sociale: customerData.ragione_sociale,
             tipo_account: 'customer'
           }
         }
@@ -225,22 +273,18 @@ export function CustomerAuthProvider({ children }) {
           .from('customer_portal_users')
           .insert({
             id: authData.user.id,
-            cliente_id: customerData.cliente_id, // Collegamento al gestionale
+            cliente_id: customerData.cliente_id,
             email: email,
-            ragione_sociale: customerData.ragione_sociale,
-            partita_iva: customerData.partita_iva || null,
-            codice_fiscale: customerData.codice_fiscale || null,
-            telefono: customerData.telefono || null,
             attivo: true
           })
         
         if (dbError) {
           console.error('❌ Errore creazione profilo cliente DB:', dbError)
           throw dbError
-        } else {
-          console.log('✅ Profilo cliente DB creato')
-          await loadCustomerProfile(authData.user.id)
         }
+        
+        console.log('✅ Profilo cliente DB creato')
+        await loadCustomerProfile(authData.user.id)
       }
 
       return { data: authData, error: null }

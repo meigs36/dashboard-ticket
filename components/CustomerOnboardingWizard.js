@@ -385,10 +385,9 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
     setIsSaving(true)
 
     try {
-      // 1. Aggiorna dati cliente
-      const { error: clienteError } = await supabase
-        .from('clienti')
-        .update({
+      // Prepara i dati da passare alla funzione onComplete
+      const wizardData = {
+        datiAziendali: {
           ragione_sociale: formData.ragione_sociale,
           partita_iva: formData.partita_iva,
           codice_fiscale: formData.codice_fiscale,
@@ -401,61 +400,74 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
           pec: formData.pec,
           email_amministrazione: formData.email_amministrazione,
           sito_web: formData.sito_web,
-          note: formData.note,
-          onboarding_completato: true,
-          onboarding_completato_il: new Date().toISOString()
-        })
-        .eq('id', clienteId)
+          note: formData.note
+        },
+        referenti: formData.referenti.filter(ref => ref.nome && ref.cognome),
+        macchinari: formData.macchinari.filter(macc => macc.tipo && macc.marca),
+        documenti: formData.documenti
+      }
 
-      if (clienteError) throw clienteError
+      console.log('📤 Invio dati onboarding:', wizardData)
 
-      // 2. Inserisci referenti
-      for (const ref of formData.referenti) {
-        if (ref.nome && ref.cognome) {
+      // Chiama la funzione onComplete passata dalla pagina parent
+      // che gestirà il salvataggio tramite API
+      if (onComplete) {
+        await onComplete(wizardData)
+      } else {
+        // Fallback: salvataggio diretto (solo per testing)
+        console.warn('⚠️ onComplete non definito, salvataggio diretto')
+        
+        // 1. Aggiorna dati cliente
+        const { error: clienteError } = await supabase
+          .from('clienti')
+          .update({
+            ...wizardData.datiAziendali,
+            onboarding_completato: true,
+            onboarding_completato_il: new Date().toISOString()
+          })
+          .eq('id', clienteId)
+
+        if (clienteError) throw clienteError
+
+        // 2. Inserisci referenti
+        for (const ref of wizardData.referenti) {
           await supabase.from('customer_referenti').insert({
-            cliente_id: clienteId,
+            customer_id: clienteId,
             ...ref
           })
         }
-      }
 
-      // 3. Inserisci macchinari
-      for (const macc of formData.macchinari) {
-        if (macc.tipo && macc.marca) {
+        // 3. Inserisci macchinari
+        for (const macc of wizardData.macchinari) {
           await supabase.from('customer_macchinari').insert({
-            cliente_id: clienteId,
+            customer_id: clienteId,
             ...macc
           })
         }
-      }
 
-      // 4. Collega documenti
-      for (const doc of formData.documenti) {
-        await supabase.from('customer_documenti').insert({
-          cliente_id: clienteId,
-          ...doc,
-          caricato_da: 'cliente',
-          caricato_il: new Date().toISOString()
-        })
-      }
+        // 4. Collega documenti
+        for (const doc of wizardData.documenti) {
+          await supabase.from('customer_documents').insert({
+            cliente_id: clienteId,
+            ...doc,
+            caricato_da: 'cliente',
+            caricato_il: new Date().toISOString()
+          })
+        }
 
-      // 5. Elimina bozza
-      await supabase
-        .from('customer_onboarding_drafts')
-        .delete()
-        .eq('cliente_id', clienteId)
+        // 5. Elimina bozza
+        await supabase
+          .from('customer_onboarding_drafts')
+          .delete()
+          .eq('cliente_id', clienteId)
 
-      alert('✅ Configurazione completata con successo!')
-
-      if (onComplete) {
-        onComplete()
-      } else {
+        alert('✅ Configurazione completata con successo!')
         router.push('/portal/dashboard')
       }
 
     } catch (error) {
-      console.error('Errore completamento:', error)
-      alert('❌ Errore durante il completamento. Riprova.')
+      console.error('❌ Errore completamento:', error)
+      alert('Errore durante il completamento: ' + (error.message || 'Riprova'))
     } finally {
       setIsSaving(false)
     }

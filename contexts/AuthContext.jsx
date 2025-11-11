@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 const AuthContext = createContext({})
 
@@ -19,14 +19,27 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const pathname = usePathname()
+
+  // ✅ FIX: Skip AuthContext su rotte /portal
+  const isPortalRoute = pathname?.startsWith('/portal')
 
   useEffect(() => {
+    // ✅ Se siamo su /portal, usa CustomerAuthContext invece
+    if (isPortalRoute) {
+      setLoading(false)
+      return
+    }
+
     // Verifica sessione iniziale
     checkSession()
 
     // Listener per cambio auth
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // ✅ Skip se siamo su /portal
+        if (isPortalRoute) return
+
         console.log('🔐 Auth event:', event)
         
         if (event === 'SIGNED_IN' && session?.user) {
@@ -37,12 +50,10 @@ export function AuthProvider({ children }) {
           setUser(null)
           setUserProfile(null)
         }
-        // ✅ Gestisci refresh automatico del token
         else if (event === 'TOKEN_REFRESHED') {
-          console.log('✅ Token refreshed successfully')
+          console.log('✅ Token refreshed')
           if (session?.user) {
             setUser(session.user)
-            // Non ricaricare profilo ogni volta, solo se serve
           }
         }
       }
@@ -51,17 +62,21 @@ export function AuthProvider({ children }) {
     return () => {
       authListener?.subscription?.unsubscribe()
     }
-  }, []) // ✅ FIX: Array vuoto - esegue solo una volta!
+  }, [isPortalRoute])
 
   async function checkSession() {
+    // ✅ Skip se siamo su /portal
+    if (isPortalRoute) {
+      setLoading(false)
+      return
+    }
+
     try {
       const { data: { session }, error } = await supabase.auth.getSession()
       
-      // ✅ Gestisci errore refresh_token_not_found
       if (error) {
         console.error('❌ Errore verifica sessione:', error)
         
-        // Se errore di refresh token, pulisci tutto e vai a login
         if (error.message?.includes('refresh_token_not_found') || 
             error.message?.includes('Invalid Refresh Token')) {
           console.error('❌ Refresh token not found, clearing session')
@@ -69,7 +84,6 @@ export function AuthProvider({ children }) {
           setUser(null)
           setUserProfile(null)
           setLoading(false)
-          router.push('/login')
           return
         }
         
@@ -90,59 +104,66 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // 🆕 CARICA PROFILO REALE DAL DATABASE
   async function loadUserProfile(userId) {
+    // ✅ Skip se siamo su /portal
+    if (isPortalRoute) return
+
     try {
       console.log('📊 Caricamento profilo utente:', userId)
       
-      const { data, error } = await supabase
+      // Cerca in utenti (admin/tecnici)
+      const { data: userData, error: userError } = await supabase
         .from('utenti')
         .select('*')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
 
-      if (error) {
-        // Se il profilo non esiste nel DB, potrebbe essere un utente appena creato
-        console.warn('⚠️ Profilo non trovato nel DB:', error.message)
-        
-        // Verifica se l'utente esiste in auth
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-        
-        if (!authError && authUser) {
-          // Crea profilo virtuale temporaneo (per retrocompatibilità)
-          const virtualProfile = {
-            id: authUser.id,
-            email: authUser.email,
-            nome: authUser.email.split('@')[0],
-            cognome: '',
-            ruolo: 'tecnico', // Default
-            attivo: true,
-            _isVirtual: true
-          }
-          console.log('⚠️ Usando profilo virtuale temporaneo')
-          setUserProfile(virtualProfile)
-        }
+      if (userError) {
+        console.error('⚠️ Profilo non trovato nel DB:', userError)
+        console.log('⚠️ Usando profilo virtuale temporaneo')
+        setUserProfile({
+          id: userId,
+          _isVirtual: true
+        })
         return
       }
 
-      console.log('✅ Profilo caricato:', data)
-      setUserProfile(data)
+      if (!userData) {
+        console.error('❌ User data è null')
+        setUserProfile(null)
+        return
+      }
+
+      console.log('✅ Profilo utente caricato:', userData)
+      
+      if (!userData.attivo) {
+        console.error('❌ Account disattivato')
+        setUserProfile(null)
+        router.push('/unauthorized')
+        return
+      }
+
+      setUserProfile(userData)
+      
     } catch (error) {
-      console.error('❌ Errore caricamento profilo:', error)
+      console.error('❌ Errore caricamento profilo utente:', error)
+      setUserProfile(null)
     }
   }
 
   async function refreshProfile() {
-    if (!user?.id) {
-      console.warn('⚠️ Impossibile ricaricare profilo: utente non loggato')
-      return
-    }
+    if (!user?.id || isPortalRoute) return
     
-    console.log('🔄 Ricaricamento profilo...')
+    console.log('🔄 Ricaricamento profilo utente...')
     await loadUserProfile(user.id)
   }
 
   async function signIn(email, password) {
+    if (isPortalRoute) {
+      console.warn('⚠️ signIn chiamato su rotta /portal - usa CustomerAuthContext!')
+      return { data: null, error: new Error('Use CustomerAuthContext for portal') }
+    }
+
     try {
       console.log('🔑 Tentativo login:', email)
       
@@ -158,7 +179,6 @@ export function AuthProvider({ children }) {
       
       console.log('✅ Auth successful:', data.user.email)
       
-      // Carica profilo reale
       if (data.user) {
         await loadUserProfile(data.user.id)
       }
@@ -171,26 +191,23 @@ export function AuthProvider({ children }) {
   }
 
   async function signUp(email, password, userData) {
+    if (isPortalRoute) {
+      console.warn('⚠️ signUp chiamato su rotta /portal - usa CustomerAuthContext!')
+      return { data: null, error: new Error('Use CustomerAuthContext for portal') }
+    }
+
     try {
       console.log('📝 Registrazione nuovo utente:', email)
       
-      // 1. Crea utente auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
-        password,
-        options: {
-          data: {
-            nome: userData.nome,
-            cognome: userData.cognome
-          }
-        }
+        password
       })
 
       if (authError) throw authError
 
-      // 2. Crea profilo nel DB
       if (authData.user) {
-        console.log('👤 Creazione profilo DB...')
+        console.log('👤 Creazione profilo utente DB...')
         
         const { error: dbError } = await supabase
           .from('utenti')
@@ -200,17 +217,16 @@ export function AuthProvider({ children }) {
             nome: userData.nome,
             cognome: userData.cognome,
             ruolo: userData.ruolo || 'tecnico',
-            telefono: userData.telefono || null,
             attivo: true
           })
         
         if (dbError) {
           console.error('❌ Errore creazione profilo DB:', dbError)
-          // Non blocchiamo la registrazione se il DB fallisce
-        } else {
-          console.log('✅ Profilo DB creato')
-          await loadUserProfile(authData.user.id)
+          throw dbError
         }
+        
+        console.log('✅ Profilo DB creato')
+        await loadUserProfile(authData.user.id)
       }
 
       return { data: authData, error: null }
@@ -260,19 +276,19 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // ✅ Funzione per forzare refresh sessione (debug)
   async function refreshSession() {
+    if (isPortalRoute) return { session: null, error: null }
+
     try {
       const { data, error } = await supabase.auth.refreshSession()
       
       if (error) {
         console.error('❌ Error refreshing session:', error)
-        // Se fallisce, logout
         await signOut()
         return { session: null, error }
       }
 
-      console.log('✅ Session refreshed manually')
+      console.log('✅ Session refreshed')
       if (data.session?.user) {
         setUser(data.session.user)
         await loadUserProfile(data.session.user.id)
@@ -285,7 +301,6 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // 🔒 HELPER PER PERMESSI
   const isAdmin = userProfile?.ruolo === 'admin'
   const isTecnico = userProfile?.ruolo === 'tecnico'
   const isActive = userProfile?.attivo === true

@@ -1,12 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext';
 import toast from 'react-hot-toast';
 
 export default function CustomerPortalLanding() {
   const router = useRouter();
+  const pathname = usePathname();
   const { signIn, user, customerProfile, loading: authLoading, needsOnboarding } = useCustomerAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,16 +15,25 @@ export default function CustomerPortalLanding() {
   const [showLogin, setShowLogin] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect se già loggato
+  // Redirect se già loggato - SOLO dalla landing page /portal
   useEffect(() => {
-    if (!authLoading && user && customerProfile) {
+    // Esegui redirect SOLO se siamo sulla landing page principale
+    if (!authLoading && user && customerProfile && pathname === '/portal') {
+      console.log('🔄 Redirect logic da landing page');
+      console.log('📍 Pathname corrente:', pathname);
+      console.log('🔍 needsOnboarding:', needsOnboarding);
+      console.log('🔍 customerProfile:', customerProfile);
+      
+      // Usa replace per navigazione forzata (non push)
       if (needsOnboarding) {
-        router.push('/portal/onboarding');
+        console.log('→ REPLACE redirect a /portal/onboarding');
+        router.replace('/portal/onboarding');
       } else {
-        router.push('/portal/dashboard');
+        console.log('→ REPLACE redirect a /portal/dashboard');
+        router.replace('/portal/dashboard');
       }
     }
-  }, [user, customerProfile, authLoading, needsOnboarding, router]);
+  }, [user, customerProfile, authLoading, needsOnboarding, router, pathname]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -39,7 +49,13 @@ export default function CustomerPortalLanding() {
 
       if (data?.user) {
         toast.success('Login effettuato con successo!');
-        // Il redirect è gestito dall'useEffect sopra
+        
+        // Redirect forzato dopo breve delay per caricare profilo
+        console.log('🚀 Forcing redirect after login...');
+        setTimeout(() => {
+          // Prova prima onboarding (poi la logica deciderà se serve)
+          router.replace('/portal/onboarding');
+        }, 500);
       }
     } catch (error) {
       console.error('Errore login:', error);

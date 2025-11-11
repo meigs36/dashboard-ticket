@@ -1,256 +1,246 @@
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 
+/**
+ * API Route: POST /api/customer/onboarding
+ * 
+ * Gestisce il salvataggio completo dei dati onboarding del cliente
+ * Include: dati aziendali, referenti, macchinari, documenti
+ */
 export async function POST(request) {
   try {
-    // Estrai token dal header Authorization
+    // 1. Parse del body
+    const { datiAziendali, referenti, macchinari, documenti } = await request.json()
+    
+    console.log('📥 Ricevuta richiesta onboarding')
+    console.log('Dati Aziendali:', datiAziendali)
+    console.log('Referenti:', referenti?.length || 0)
+    console.log('Macchinari:', macchinari?.length || 0)
+    console.log('Documenti:', documenti?.length || 0)
+    
+    // 2. Verifica autorizzazione
     const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Non autenticato' },
-        { status: 401 }
-      )
+    if (!authHeader) {
+      console.error('❌ Header Authorization mancante')
+      return NextResponse.json({ 
+        success: false,
+        error: 'Non autorizzato - Token mancante' 
+      }, { status: 401 })
     }
 
+    // 3. Crea client Supabase con Service Role Key
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+    
+    // 4. Verifica sessione utente
     const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     
-    // Verifica utente con token
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Token non valido' },
-        { status: 401 }
-      )
+    if (userError || !user) {
+      console.error('❌ Sessione non valida:', userError)
+      return NextResponse.json({ 
+        success: false,
+        error: 'Sessione non valida o scaduta' 
+      }, { status: 401 })
     }
 
-    const userId = user.id
-    const body = await request.json()
-    
-    const {
-      datiAziendali,
-      referenti,
-      macchinari,
-      documenti
-    } = body
+    console.log('✅ Utente autenticato:', user.id)
 
-    console.log('📝 Salvataggio onboarding per customer:', userId)
+    // 5. Ottieni cliente_id dal customer_portal_users
+    const { data: customerData, error: customerError } = await supabase
+      .from('customer_portal_users')
+      .select('cliente_id')
+      .eq('id', user.id)
+      .single()
 
-    // 1. Aggiorna dati aziendali in customer_portal_users
-    if (datiAziendali) {
-      const { error: updateError } = await supabase
-        .from('customer_portal_users')
-        .update({
-          ragione_sociale: datiAziendali.ragioneSociale,
-          partita_iva: datiAziendali.partitaIva,
-          codice_fiscale: datiAziendali.codiceFiscale,
-          indirizzo: datiAziendali.indirizzo,
-          citta: datiAziendali.citta,
-          cap: datiAziendali.cap,
-          provincia: datiAziendali.provincia,
-          regione: datiAziendali.regione,
-          telefono: datiAziendali.telefono,
-          email: datiAziendali.email,
-          pec: datiAziendali.pec,
-          sito_web: datiAziendali.sitoWeb,
-          note: datiAziendali.note,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId)
-
-      if (updateError) {
-        console.error('❌ Errore update dati aziendali:', updateError)
-        throw updateError
-      }
-
-      console.log('✅ Dati aziendali aggiornati')
+    if (customerError || !customerData) {
+      console.error('❌ Cliente non trovato:', customerError)
+      return NextResponse.json({ 
+        success: false,
+        error: 'Profilo cliente non trovato' 
+      }, { status: 404 })
     }
 
-    // 2. Salva referenti
+    const clienteId = customerData.cliente_id
+    console.log('✅ Cliente ID:', clienteId)
+
+    // ========================================
+    // 6. SALVATAGGIO DATI AZIENDALI
+    // ========================================
+    console.log('💾 Aggiornamento dati aziendali...')
+    
+    const { error: clienteError } = await supabase
+      .from('clienti')
+      .update({
+        ...datiAziendali,
+        onboarding_completato: true,
+        onboarding_completato_il: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', clienteId)
+
+    if (clienteError) {
+      console.error('❌ Errore aggiornamento cliente:', clienteError)
+      throw new Error(`Errore aggiornamento dati aziendali: ${clienteError.message}`)
+    }
+
+    console.log('✅ Dati aziendali salvati')
+
+    // ========================================
+    // 7. SALVATAGGIO REFERENTI
+    // ========================================
     if (referenti && referenti.length > 0) {
-      // Prima elimina vecchi referenti
-      await supabase
-        .from('customer_referenti')
-        .delete()
-        .eq('customer_id', userId)
-
-      // Poi inserisci nuovi
-      const referentiData = referenti.map(ref => ({
-        customer_id: userId,
+      console.log(`💾 Inserimento ${referenti.length} referenti...`)
+      
+      const referentiToInsert = referenti.map(ref => ({
+        cliente_id: clienteId,
         nome: ref.nome,
         cognome: ref.cognome,
-        email: ref.email,
-        telefono: ref.telefono,
         ruolo: ref.ruolo,
+        telefono: ref.telefono,
+        email: ref.email,
         principale: ref.principale || false
       }))
 
       const { error: referentiError } = await supabase
         .from('customer_referenti')
-        .insert(referentiData)
-
+        .insert(referentiToInsert)
+      
       if (referentiError) {
-        console.error('❌ Errore insert referenti:', referentiError)
-        throw referentiError
+        console.error('❌ Errore inserimento referenti:', referentiError)
+        throw new Error(`Errore salvataggio referenti: ${referentiError.message}`)
       }
 
-      console.log(`✅ ${referenti.length} referenti salvati`)
+      console.log('✅ Referenti salvati')
     }
 
-    // 3. Salva macchinari
+    // ========================================
+    // 8. SALVATAGGIO MACCHINARI
+    // ========================================
     if (macchinari && macchinari.length > 0) {
-      // Prima elimina vecchi macchinari
-      await supabase
-        .from('customer_macchinari')
-        .delete()
-        .eq('customer_id', userId)
-
-      // Poi inserisci nuovi
-      const macchinariData = macchinari.map(macc => ({
-        customer_id: userId,
-        numero_seriale: macc.numeroSeriale,
-        numero_libro: macc.numeroLibro,
+      console.log(`💾 Inserimento ${macchinari.length} macchinari...`)
+      
+      const macchinariToInsert = macchinari.map(macc => ({
+        cliente_id: clienteId,
         tipo_macchinario: macc.tipo,
         marca: macc.marca,
         modello: macc.modello,
-        data_installazione: macc.dataInstallazione,
-        ubicazione_specifica: macc.ubicazione,
-        garanzia_scadenza: macc.garanziaScadenza,
-        contratto_manutenzione: macc.contrattoManutenzione,
-        note_tecniche: macc.note,
-        stato: 'attivo'
+        numero_seriale: macc.numero_seriale,
+        data_installazione: macc.data_installazione,
+        ubicazione: macc.ubicazione,
+        numero_libro: macc.numero_libro,
+        garanzia_scadenza: macc.garanzia_scadenza,
+        contratto_manutenzione: macc.contratto_manutenzione || false,
+        note_tecniche: macc.note_tecniche
       }))
 
       const { error: macchinariError } = await supabase
         .from('customer_macchinari')
-        .insert(macchinariData)
-
+        .insert(macchinariToInsert)
+      
       if (macchinariError) {
-        console.error('❌ Errore insert macchinari:', macchinariError)
-        throw macchinariError
+        console.error('❌ Errore inserimento macchinari:', macchinariError)
+        throw new Error(`Errore salvataggio macchinari: ${macchinariError.message}`)
       }
 
-      console.log(`✅ ${macchinari.length} macchinari salvati`)
+      console.log('✅ Macchinari salvati')
     }
 
-    // 4. Aggiorna onboarding status
-    const onboardingData = {
-      customer_id: userId,
-      user_id: userId,
-      dati_aziendali_completati: !!datiAziendali,
-      dati_aziendali_data: datiAziendali ? new Date().toISOString() : null,
-      referenti_completati: !!(referenti && referenti.length > 0),
-      referenti_data: referenti && referenti.length > 0 ? new Date().toISOString() : null,
-      macchinari_completati: !!(macchinari && macchinari.length > 0),
-      macchinari_data: macchinari && macchinari.length > 0 ? new Date().toISOString() : null,
-      documenti_completati: !!(documenti && documenti.length > 0),
-      documenti_data: documenti && documenti.length > 0 ? new Date().toISOString() : null,
-      completato: true,
-      completato_il: new Date().toISOString()
+    // ========================================
+    // 9. SALVATAGGIO DOCUMENTI
+    // ========================================
+    if (documenti && documenti.length > 0) {
+      console.log(`💾 Collegamento ${documenti.length} documenti...`)
+      
+      const documentiToInsert = documenti.map(doc => ({
+        cliente_id: clienteId,
+        nome_file: doc.nome_file,
+        tipo_file: doc.tipo_file,
+        dimensione: doc.dimensione,
+        categoria: doc.categoria,
+        storage_path: doc.storage_path,
+        caricato_da: 'cliente',
+        caricato_il: new Date().toISOString()
+      }))
+
+      const { error: documentiError } = await supabase
+        .from('customer_documents')
+        .insert(documentiToInsert)
+      
+      if (documentiError) {
+        console.error('❌ Errore inserimento documenti:', documentiError)
+        throw new Error(`Errore salvataggio documenti: ${documentiError.message}`)
+      }
+
+      console.log('✅ Documenti collegati')
     }
 
-    // Upsert (insert o update)
-    const { error: statusError } = await supabase
-      .from('customer_onboarding_status')
-      .upsert(onboardingData, {
-        onConflict: 'customer_id'
-      })
+    // ========================================
+    // 10. PULIZIA BOZZE
+    // ========================================
+    console.log('🧹 Eliminazione bozze...')
+    
+    const { error: deleteDraftError } = await supabase
+      .from('customer_onboarding_drafts')
+      .delete()
+      .eq('cliente_id', clienteId)
 
-    if (statusError) {
-      console.error('❌ Errore update onboarding status:', statusError)
-      throw statusError
+    if (deleteDraftError) {
+      console.warn('⚠️ Errore eliminazione bozze (non critico):', deleteDraftError)
+      // Non blocca il processo
+    } else {
+      console.log('✅ Bozze eliminate')
     }
 
-    console.log('✅ Onboarding status aggiornato')
-
-    return NextResponse.json({
+    // ========================================
+    // 11. RISPOSTA SUCCESSO
+    // ========================================
+    console.log('🎉 Onboarding completato con successo!')
+    
+    return NextResponse.json({ 
       success: true,
       message: 'Onboarding completato con successo',
       data: {
-        userId,
-        referentiCount: referenti?.length || 0,
-        macchinariCount: macchinari?.length || 0
+        cliente_id: clienteId,
+        referenti_salvati: referenti?.length || 0,
+        macchinari_salvati: macchinari?.length || 0,
+        documenti_salvati: documenti?.length || 0
       }
     })
 
   } catch (error) {
+    // ========================================
+    // ERROR HANDLING
+    // ========================================
     console.error('❌ Errore API onboarding:', error)
-    return NextResponse.json(
-      { 
-        success: false,
-        error: error.message || 'Errore durante il salvataggio'
-      },
-      { status: 500 }
-    )
+    
+    return NextResponse.json({ 
+      success: false,
+      error: error.message || 'Errore interno del server',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 500 })
   }
 }
 
-// GET per recuperare dati onboarding esistenti
-export async function GET(request) {
-  try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Non autenticato' },
-        { status: 401 }
-      )
-    }
+/**
+ * Gestione richieste non supportate
+ */
+export async function GET() {
+  return NextResponse.json({ 
+    error: 'Metodo non supportato. Usa POST.' 
+  }, { status: 405 })
+}
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Token non valido' },
-        { status: 401 }
-      )
-    }
+export async function PUT() {
+  return NextResponse.json({ 
+    error: 'Metodo non supportato. Usa POST.' 
+  }, { status: 405 })
+}
 
-    const userId = user.id
-
-    // Recupera dati customer
-    const { data: customerData, error: customerError } = await supabase
-      .from('customer_portal_users')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    if (customerError) throw customerError
-
-    // Recupera referenti
-    const { data: referenti } = await supabase
-      .from('customer_referenti')
-      .select('*')
-      .eq('customer_id', userId)
-
-    // Recupera macchinari
-    const { data: macchinari } = await supabase
-      .from('customer_macchinari')
-      .select('*')
-      .eq('customer_id', userId)
-
-    // Recupera status onboarding
-    const { data: onboardingStatus } = await supabase
-      .from('customer_onboarding_status')
-      .select('*')
-      .eq('customer_id', userId)
-      .single()
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        customerData,
-        referenti: referenti || [],
-        macchinari: macchinari || [],
-        onboardingStatus
-      }
-    })
-
-  } catch (error) {
-    console.error('❌ Errore GET onboarding:', error)
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    )
-  }
+export async function DELETE() {
+  return NextResponse.json({ 
+    error: 'Metodo non supportato. Usa POST.' 
+  }, { status: 405 })
 }
