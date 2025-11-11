@@ -71,11 +71,11 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
         onMediaUploaded({ tipo: 'audio', ...result })
       }
 
-      alert('✅ Audio registrato caricato!\n\nSarà trascritto automaticamente.')
+      console.log('✅ Audio caricato con successo')
       
     } catch (error) {
       console.error('Errore upload audio:', error)
-      alert('❌ Errore: ' + error.message)
+      console.error('❌ Errore upload:', error.message)
     } finally {
       setLoading(false)
     }
@@ -90,13 +90,13 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
     // Verifica che sia un file audio
     const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'audio/ogg', 'audio/webm']
     if (!validTypes.some(type => file.type.startsWith('audio/'))) {
-      alert('❌ Seleziona un file audio valido (.mp3, .wav, .m4a, .ogg, .webm)')
+      console.error('❌ File audio non valido'); return
       return
     }
 
     // Max 50MB
     if (file.size > 50 * 1024 * 1024) {
-      alert('❌ File troppo grande! Max 50MB')
+      console.error('❌ File troppo grande (max 50MB)'); return
       return
     }
 
@@ -122,11 +122,11 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
         onMediaUploaded({ tipo: 'audio', ...result })
       }
 
-      alert('✅ File audio caricato!\n\nSarà trascritto automaticamente.')
+      console.log('✅ File audio caricato con successo')
       
     } catch (error) {
       console.error('Errore upload file audio:', error)
-      alert('❌ Errore: ' + error.message)
+      console.error('❌ Errore upload:', error.message)
     } finally {
       setLoading(false)
     }
@@ -142,7 +142,7 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
       await captureMultiplePhotos(files)
     } catch (error) {
       console.error('Errore cattura foto:', error)
-      alert('❌ Errore durante la cattura delle foto')
+      console.error('❌ Errore cattura foto')
     }
   }
 
@@ -169,11 +169,11 @@ export default function InterventoMediaCapture({ interventoId, onMediaUploaded }
         })
       }
 
-      alert(`✅ ${results.length} foto caricate con successo!`)
+      console.log(`✅ ${results.length} foto caricate`)
       
     } catch (error) {
       console.error('Errore upload foto:', error)
-      alert('❌ Errore: ' + error.message)
+      console.error('❌ Errore upload:', error.message)
     } finally {
       setLoading(false)
     }

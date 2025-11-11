@@ -1,4 +1,4 @@
-// components/PWAAudioPlayer.jsx - Player audio ottimizzato per PWA iOS
+// components/PWAAudioPlayer.jsx - VERSIONE CORRETTA SENZA ALERT
 'use client'
 
 import { useEffect, useRef, useState } from 'react';
@@ -10,6 +10,7 @@ export default function PWAAudioPlayer({ src, className = '' }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [error, setError] = useState(null); // ✅ NUOVO: stato errore
 
   const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent);
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || 
@@ -109,8 +110,10 @@ export default function PWAAudioPlayer({ src, className = '' }) {
     } catch (error) {
       console.error('❌ Errore riproduzione audio:', error);
       
+      // ✅ FIX: Usa stato invece di alert bloccante
       if (isIOS() && isStandalone()) {
-        alert('⚠️ Errore riproduzione audio.\n\nProva:\n1. Tocca lo schermo prima di riprodurre\n2. Oppure apri in Safari invece che dall\'app');
+        setError('Tocca di nuovo il pulsante play per iniziare');
+        setTimeout(() => setError(null), 3000); // Auto-clear dopo 3 sec
       }
     }
   };
@@ -140,6 +143,13 @@ export default function PWAAudioPlayer({ src, className = '' }) {
         preload="metadata"
         playsInline // Importante per iOS!
       />
+      
+      {/* ✅ NUOVO: Mostra errore se presente */}
+      {error && (
+        <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
+          💡 {error}
+        </div>
+      )}
       
       <div className="flex items-center gap-3">
         {/* Play/Pause Button */}
