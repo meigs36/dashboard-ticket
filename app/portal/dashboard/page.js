@@ -14,13 +14,14 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Image from 'next/image'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
 import { supabase } from '@/lib/supabase'
 import {
   Building2, Users, Wrench, FileText, Settings, LogOut,
   Mail, Phone, MapPin, Calendar, CheckCircle2, AlertCircle,
-  Download, Eye, Edit, Plus, ExternalLink, Clock, Shield
+  Download, Eye, Edit, Plus, ExternalLink, Clock, Shield, Ticket
 } from 'lucide-react'
 
 export default function CustomerDashboard() {
@@ -224,9 +225,13 @@ export default function CustomerDashboard() {
             Gestisci la tua assistenza tecnica in un unico posto
           </p>
           <div className="flex flex-wrap gap-3">
-            <button className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors">
-              📞 Richiedi Assistenza
-            </button>
+            <Link 
+              href="/portal/ticket/nuovo"
+              className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors"
+            >
+              <Ticket className="w-4 h-4" />
+              Apri Ticket
+            </Link>
             <button className="px-4 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-400 transition-colors">
               📄 Vedi Contratti
             </button>
@@ -681,7 +686,14 @@ export default function CustomerDashboard() {
                 Il nostro team è a tua disposizione per qualsiasi necessità tecnica o amministrativa.
               </p>
               <div className="flex flex-wrap gap-3">
-                <a href="tel:+390123456789" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                <Link 
+                  href="/portal/ticket/nuovo"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Ticket className="w-4 h-4" />
+                  Apri Ticket
+                </Link>
+                <a href="tel:+390123456789" className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium">
                   <Phone className="w-4 h-4" />
                   Chiama Ora
                 </a>

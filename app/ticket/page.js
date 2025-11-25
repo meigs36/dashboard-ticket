@@ -18,6 +18,7 @@ export default function TicketPage() {
   const [filtroStato, setFiltroStato] = useState('tutti')
   const [filtroPriorita, setFiltroPriorita] = useState('tutti')
   const [filtroAgente, setFiltroAgente] = useState('tutti')
+  const [filtroCanale, setFiltroCanale] = useState('tutti')
   const [mostraFiltri, setMostraFiltri] = useState(false)
   
   // ⚡ NUOVO: Lista tecnici
@@ -170,13 +171,17 @@ export default function TicketPage() {
         : (ticket.id_tecnico_assegnato && ticket.id_tecnico_assegnato.toString() === filtroAgente)
       )
     
-    return matchRicerca && matchStato && matchPriorita && matchAgente
+    // ⚡ NUOVO: Filtro per canale origine
+    const matchCanale = filtroCanale === 'tutti' || ticket.canale_origine === filtroCanale
+    
+    return matchRicerca && matchStato && matchPriorita && matchAgente && matchCanale
   })
 
   const resetFiltri = () => {
     setFiltroStato('tutti')
     setFiltroPriorita('tutti')
     setFiltroAgente('tutti')
+    setFiltroCanale('tutti')
     setSearchTerm('')
   }
 
@@ -312,7 +317,7 @@ export default function TicketPage() {
             <button 
               onClick={() => setMostraFiltri(!mostraFiltri)}
               className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
-                mostraFiltri 
+                mostraFiltri || filtroStato !== 'tutti' || filtroPriorita !== 'tutti' || filtroAgente !== 'tutti' || filtroCanale !== 'tutti'
                   ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-400' 
                   : 'border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-gray-300'
               }`}
@@ -324,7 +329,7 @@ export default function TicketPage() {
 
           {mostraFiltri && (
             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Stato</label>
                   <select 
@@ -381,6 +386,25 @@ export default function TicketPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* ⚡ NUOVO: FILTRO CANALE ORIGINE */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Canale Origine
+                  </label>
+                  <select 
+                    value={filtroCanale}
+                    onChange={(e) => setFiltroCanale(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="tutti">📋 Tutti i canali</option>
+                    <option value="portale_cliente">📱 Portale Cliente</option>
+                    <option value="telefono">📞 Telefono</option>
+                    <option value="whatsapp">💬 WhatsApp</option>
+                    <option value="form_web">🌐 Form Web</option>
+                    <option value="admin_manuale">🖥️ Admin Manuale</option>
+                  </select>
+                </div>
               </div>
               
               <div className="mt-4 flex justify-end">
@@ -406,7 +430,7 @@ export default function TicketPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    {/* Badge: Numero, Priorità, Stato */}
+                    {/* Badge: Numero, Priorità, Stato, Canale */}
                     <div className="flex items-center gap-3 mb-3 flex-wrap">
                       <button
                         onClick={(e) => {
@@ -423,6 +447,12 @@ export default function TicketPage() {
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatoBadge(ticket.stato)}`}>
                         {getStatoLabel(ticket.stato)}
                       </span>
+                      {/* ⚡ NUOVO: Badge Portale Cliente */}
+                      {ticket.canale_origine === 'portale_cliente' && (
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-700">
+                          📱 Portale Cliente
+                        </span>
+                      )}
                     </div>
                     
                     {/* 👤 NOME CLIENTE PROMINENTE (Opzione 1) */}
@@ -479,11 +509,11 @@ export default function TicketPage() {
               Nessun ticket trovato
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {searchTerm || filtroStato !== 'tutti' || filtroPriorita !== 'tutti' 
+              {searchTerm || filtroStato !== 'tutti' || filtroPriorita !== 'tutti' || filtroCanale !== 'tutti'
                 ? 'Prova a modificare i filtri di ricerca'
                 : 'Inizia creando il tuo primo ticket'}
             </p>
-            {!searchTerm && filtroStato === 'tutti' && filtroPriorita === 'tutti' && (
+            {!searchTerm && filtroStato === 'tutti' && filtroPriorita === 'tutti' && filtroCanale === 'tutti' && (
               <Link
                 href="/ticket/nuovo"
                 className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
