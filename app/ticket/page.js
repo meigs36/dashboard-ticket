@@ -406,7 +406,8 @@ export default function TicketPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                    {/* Badge: Numero, Priorità, Stato */}
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -424,27 +425,34 @@ export default function TicketPage() {
                       </span>
                     </div>
                     
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                    {/* 👤 NOME CLIENTE PROMINENTE (Opzione 1) */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <User size={18} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                      <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {ticket.cliente?.ragione_sociale || ticket.clienti?.ragione_sociale || 'Cliente Sconosciuto'}
+                      </h3>
+                    </div>
+
+                    {/* Oggetto come Sottotitolo */}
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
                       {ticket.oggetto}
-                    </h3>
+                    </h4>
                     
-                    <p className="text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                    {/* Descrizione più compatta */}
+                    <p className="text-gray-600 dark:text-gray-400 mb-3 line-clamp-2 text-sm">
                       {ticket.descrizione}
                     </p>
                     
-                    <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <User size={14} />
-                        <strong>{ticket.clienti?.ragione_sociale}</strong>
-                      </span>
+                    {/* Info aggiuntive (senza cliente, ora è sopra) */}
+                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
                       {ticket.macchinari && (
                         <span className="flex items-center gap-1">
-                          <AlertTriangle size={14} />
+                          <AlertTriangle size={12} />
                           {ticket.macchinari.tipo_macchinario}
                         </span>
                       )}
                       <span className="flex items-center gap-1">
-                        <Clock size={14} />
+                        <Clock size={12} />
                         {getTempoDaApertura(ticket.data_apertura)}
                       </span>
                     </div>

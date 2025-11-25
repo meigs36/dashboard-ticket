@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { 
-  AlertCircle, Users, HardDrive, Ticket, TrendingUp, 
+  AlertCircle, Users, User, HardDrive, Ticket, TrendingUp, 
   Zap, Plus, BarChart3, ArrowRight 
 } from 'lucide-react'
 import Link from 'next/link'
@@ -323,9 +323,10 @@ export default function DashboardAdmin() {
                     className="block cursor-pointer"
                   >
                     <div className="group p-4 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all">
-                      <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                          {/* Badge in alto */}
+                          <div className="flex items-center gap-2 mb-2">
                             <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
                               {ticket.numero_ticket}
                             </span>
@@ -336,11 +337,18 @@ export default function DashboardAdmin() {
                               {ticket.priorita}
                             </span>
                           </div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+                          
+                          {/* 👤 NOME CLIENTE PROMINENTE */}
+                          <div className="flex items-center gap-2 mb-1">
+                            <User size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                            <h4 className="font-bold text-blue-600 dark:text-blue-400">
+                              {ticket.cliente?.ragione_sociale || 'Cliente sconosciuto'}
+                            </h4>
+                          </div>
+                          
+                          {/* Oggetto come Sottotitolo */}
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
                             {ticket.oggetto}
-                          </h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {ticket.clienti?.ragione_sociale || 'Cliente sconosciuto'}
                           </p>
                         </div>
                         <ArrowRight 

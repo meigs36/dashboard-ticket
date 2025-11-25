@@ -1,5 +1,14 @@
 // app/portal/dashboard/page.js
 // Dashboard Clienti - Versione Completa
+//
+// 🔧 MODIFICHE APPLICATE (12 Nov 2025):
+// 1. ✅ Fix cliente_id: Usa customerProfile.cliente_id invece di customerProfile.id
+//    - customerProfile.id = UUID utente auth
+//    - customerProfile.cliente_id = ID nella tabella clienti
+// 2. ✅ Ottimizzazione: Rimossa query inutile per ricaricare dati cliente
+//    - I dati sono già in customerProfile dopo il fix del CustomerAuthContext
+// 3. ✅ Sicurezza: Aggiunto check che cliente_id esista prima delle query
+// 4. ✅ Debug: Aggiunto logging per tracciare caricamento dati
 
 'use client'
 
@@ -22,7 +31,7 @@ export default function CustomerDashboard() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [dashboardData, setDashboardData] = useState({
-    cliente: null,
+    cliente: customerProfile || null, // Inizializza con customerProfile se disponibile
     referenti: [],
     macchinari: [],
     documenti: [],
@@ -47,14 +56,17 @@ export default function CustomerDashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true)
-      const clienteId = customerProfile.id
+      // 🔧 FIX: Usa cliente_id invece di id (che è l'auth user id)
+      const clienteId = customerProfile.cliente_id
 
-      // Carica dati cliente
-      const { data: clienteData } = await supabase
-        .from('clienti')
-        .select('*')
-        .eq('id', clienteId)
-        .single()
+      if (!clienteId) {
+        console.error('❌ cliente_id non trovato in customerProfile:', customerProfile)
+        throw new Error('ID cliente non disponibile')
+      }
+
+      console.log('📊 Caricamento dashboard per cliente:', clienteId)
+
+      // 🎯 NON serve ricaricare i dati cliente - sono già in customerProfile dopo il fix del context!
 
       // Carica referenti
       const { data: referentiData } = await supabase
@@ -98,12 +110,19 @@ export default function CustomerDashboard() {
         .limit(5)
 
       setDashboardData({
-        cliente: clienteData,
+        cliente: customerProfile, // 🔧 Usa direttamente customerProfile (già contiene tutti i dati)
         referenti: referentiData || [],
         macchinari: macchinariData || [],
         documenti: documentiData || [],
         contratti: contrattiData || [],
         tickets: ticketsData || []
+      })
+      
+      console.log('✅ Dashboard caricata con successo:', {
+        cliente: customerProfile.ragione_sociale,
+        referenti: referentiData?.length || 0,
+        macchinari: macchinariData?.length || 0,
+        documenti: documentiData?.length || 0
       })
     } catch (error) {
       console.error('Errore caricamento dashboard:', error)

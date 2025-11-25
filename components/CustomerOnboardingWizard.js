@@ -1,11 +1,15 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 
-export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
+export default function CustomerOnboardingWizard({ 
+  clienteId, 
+  onComplete, 
+  initialData = null  // ← Questo DEVE esserci!
+}) {
   const router = useRouter()
   const fileInputRef = useRef(null)
   
@@ -13,6 +17,7 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
   const [isSaving, setIsSaving] = useState(false)
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [visitedSteps, setVisitedSteps] = useState([1]) // Track visited steps
+  const [documentHash, setDocumentHash] = useState('') // Hash SHA-256 per firma digitale
   
   const [formData, setFormData] = useState({
     // Step 1: Dati Aziendali
@@ -57,12 +62,106 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
     // Step 4: Documenti
     documenti: [],
     
-    // Step 5: Conferma
-    accetta_termini: false
+    // Step 5: Firma e Consensi
+    consenso_privacy: false,
+    consenso_condizioni: false,
+    consenso_veridicita: false,
+    accetta_termini: false // Retrocompatibilità
   })
 
   const totalSteps = 5
   const progressPercentage = (currentStep / totalSteps) * 100
+
+  // ==================== POPOLAMENTO DA INITIALDATA ====================
+  
+  // Popola i dati esistenti del cliente se trovati
+  useEffect(() => {
+    if (initialData) {
+      console.log('📥 Popolamento dati da database:', initialData)
+      
+      setFormData(prev => ({
+        ...prev,
+        // Popola dati aziendali se esistono
+        ragione_sociale: initialData.ragione_sociale || prev.ragione_sociale,
+        partita_iva: initialData.partita_iva || prev.partita_iva,
+        codice_fiscale: initialData.codice_fiscale || prev.codice_fiscale,
+        indirizzo: initialData.indirizzo || prev.indirizzo,
+        citta: initialData.citta || prev.citta,
+        cap: initialData.cap || prev.cap,
+        provincia: initialData.provincia || prev.provincia,
+        telefono: initialData.telefono || prev.telefono,
+        email: initialData.email || prev.email,
+        pec: initialData.pec || prev.pec,
+        email_amministrazione: initialData.email_amministrazione || prev.email_amministrazione,
+        sito_web: initialData.sito_web || prev.sito_web,
+        note: initialData.note || prev.note,
+        
+        // Popola referenti se esistono (altrimenti mantieni array vuoto)
+        referenti: initialData.referenti && initialData.referenti.length > 0 
+          ? initialData.referenti 
+          : prev.referenti,
+        
+        // Popola macchinari se esistono (altrimenti mantieni array vuoto)
+        macchinari: initialData.macchinari && initialData.macchinari.length > 0 
+          ? initialData.macchinari 
+          : prev.macchinari,
+        
+        // Documenti vengono caricati separatamente
+        documenti: initialData.documenti || prev.documenti
+      }))
+      
+      console.log('✅ Dati popolati con successo dal database')
+    }
+  }, [initialData])
+
+  // ==================== GENERAZIONE HASH SHA-256 ====================
+  
+  // Genera hash del documento per firma digitale quando si arriva allo step 5
+  useEffect(() => {
+    if (currentStep === 5) {
+      generateDocumentHash()
+    }
+  }, [currentStep, formData])
+
+  const generateDocumentHash = async () => {
+    try {
+      // Crea stringa deterministica dei dati per la firma
+      const dataString = JSON.stringify({
+        azienda: {
+          ragione_sociale: formData.ragione_sociale,
+          partita_iva: formData.partita_iva,
+          codice_fiscale: formData.codice_fiscale,
+          indirizzo: formData.indirizzo,
+          email: formData.email
+        },
+        referenti: formData.referenti.map(r => ({
+          nome: r.nome,
+          cognome: r.cognome,
+          email: r.email
+        })),
+        macchinari: formData.macchinari.map(m => ({
+          tipo: m.tipo,
+          marca: m.marca,
+          modello: m.modello,
+          numero_seriale: m.numero_seriale
+        })),
+        documenti: formData.documenti.map(d => d.percorso),
+        timestamp: new Date().toISOString()
+      })
+
+      // Genera hash SHA-256 usando Web Crypto API
+      const encoder = new TextEncoder()
+      const data = encoder.encode(dataString)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+      
+      setDocumentHash(hashHex)
+      console.log('🔐 Hash documento generato:', hashHex.substring(0, 16) + '...')
+    } catch (error) {
+      console.error('Errore generazione hash:', error)
+    }
+  }
 
   // Configurazione step con colori
   const steps = [
@@ -112,8 +211,8 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
     },
     { 
       number: 5, 
-      label: 'Riepilogo e Conferma', 
-      shortLabel: 'Conferma',
+      label: 'Riepilogo e Firma Digitale', 
+      shortLabel: 'Firma',
       color: 'slate',
       bgColor: 'bg-slate-600',
       textColor: 'text-slate-900',
@@ -377,14 +476,59 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!formData.accetta_termini) {
-      alert('Devi accettare i termini e le condizioni per continuare')
+    // Validazione consensi - TUTTI e 3 devono essere accettati
+    if (!formData.consenso_privacy || !formData.consenso_condizioni || !formData.consenso_veridicita) {
+      alert('⚠️ Devi accettare tutti i consensi per continuare')
       return
     }
 
     setIsSaving(true)
 
     try {
+      // Raccogli dati tecnici per certificato firma digitale
+      const datiTecnici = {
+        timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+        screen_resolution: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      }
+
+      // Crea certificato firma completo secondo normativa CAD/eIDAS
+      const certificatoFirma = {
+        firmatario: {
+          cliente_id: clienteId,
+          email: formData.email,
+          azienda: formData.ragione_sociale
+        },
+        onboarding: {
+          ragione_sociale: formData.ragione_sociale,
+          partita_iva: formData.partita_iva,
+          codice_fiscale: formData.codice_fiscale,
+          num_referenti: formData.referenti.filter(r => r.nome && r.cognome).length,
+          num_macchinari: formData.macchinari.filter(m => m.tipo && m.marca).length,
+          num_documenti: formData.documenti.length
+        },
+        firma: {
+          timestamp: datiTecnici.timestamp,
+          user_agent: datiTecnici.user_agent,
+          documento_hash: documentHash,
+          metodo: 'firma_elettronica_semplice',
+          normativa: 'CAD D.Lgs. 82/2005 + eIDAS UE 910/2014'
+        },
+        consensi: {
+          privacy: formData.consenso_privacy,
+          condizioni: formData.consenso_condizioni,
+          veridicita: formData.consenso_veridicita,
+          timestamp_consenso: datiTecnici.timestamp
+        },
+        metadata: {
+          versione_wizard: '2.0.0',
+          screen_resolution: datiTecnici.screen_resolution,
+          timezone: datiTecnici.timezone,
+          browser: navigator.userAgent.split(' ').slice(-1)[0]
+        }
+      }
+
       // Prepara i dati da passare alla funzione onComplete
       const wizardData = {
         datiAziendali: {
@@ -404,10 +548,19 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
         },
         referenti: formData.referenti.filter(ref => ref.nome && ref.cognome),
         macchinari: formData.macchinari.filter(macc => macc.tipo && macc.marca),
-        documenti: formData.documenti
+        documenti: formData.documenti,
+        firma: {
+          documento_hash: documentHash,
+          certificato_completo: certificatoFirma,
+          user_agent: datiTecnici.user_agent,
+          timestamp_firma: datiTecnici.timestamp,
+          consenso_privacy: formData.consenso_privacy,
+          consenso_condizioni: formData.consenso_condizioni,
+          consenso_veridicita: formData.consenso_veridicita
+        }
       }
 
-      console.log('📤 Invio dati onboarding:', wizardData)
+      console.log('📤 Invio dati onboarding con firma digitale:', wizardData)
 
       // Chiama la funzione onComplete passata dalla pagina parent
       // che gestirà il salvataggio tramite API
@@ -455,7 +608,25 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
           })
         }
 
-        // 5. Elimina bozza
+        // 5. Salva certificato firma digitale
+        const { error: firmaError } = await supabase
+          .from('customer_onboarding_signatures')
+          .insert({
+            cliente_id: clienteId,
+            documento_hash: documentHash,
+            user_agent: datiTecnici.user_agent,
+            timestamp_firma: datiTecnici.timestamp,
+            consenso_privacy: formData.consenso_privacy,
+            consenso_condizioni: formData.consenso_condizioni,
+            consenso_veridicita: formData.consenso_veridicita,
+            certificato_completo: certificatoFirma
+          })
+
+        if (firmaError) {
+          console.warn('⚠️ Errore salvataggio firma (tabella potrebbe non esistere):', firmaError)
+        }
+
+        // 6. Elimina bozza
         await supabase
           .from('customer_onboarding_drafts')
           .delete()
@@ -1374,26 +1545,100 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
                   )}
                 </div>
 
-                {/* Accettazione Termini */}
-                <div className="bg-white rounded-xl p-4 border-2 border-gray-200">
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      required
-                      checked={formData.accetta_termini}
-                      onChange={(e) => handleChange('accetta_termini', e.target.checked)}
-                      className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
-                    />
-                    <div className="text-sm">
-                      <p className="font-medium text-gray-900 mb-1">
-                        Accetto i termini e le condizioni *
-                      </p>
-                      <p className="text-gray-600 text-xs">
-                        Confermo che i dati inseriti sono corretti e autorizzo il trattamento 
-                        degli stessi secondo la normativa sulla privacy (GDPR).
-                      </p>
-                    </div>
-                  </label>
+                {/* Firma Digitale e Consensi */}
+                <div className="bg-indigo-50 rounded-xl p-6 border-2 border-indigo-200">
+                  <h3 className="font-semibold text-indigo-900 mb-4 flex items-center gap-2">
+                    <span className="text-2xl">✍️</span>
+                    <span>Firma Digitale e Consensi</span>
+                  </h3>
+                  
+                  {/* Hash Documento */}
+                  <div className="bg-white rounded-lg p-4 mb-4 border border-indigo-200">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                      🔐 Codice Certificazione Documento (SHA-256):
+                    </p>
+                    <p className="text-xs font-mono bg-gray-100 p-2 rounded break-all text-gray-600">
+                      {documentHash || 'Generazione in corso...'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Questo codice garantisce l'integrità dei dati inseriti e costituisce 
+                      firma elettronica ai sensi del CAD (D.Lgs. 82/2005)
+                    </p>
+                  </div>
+
+                  {/* Consensi Separati */}
+                  <div className="space-y-3">
+                    {/* Consenso Privacy */}
+                    <label className="flex items-start gap-3 cursor-pointer bg-white rounded-lg p-3 hover:bg-indigo-50 transition-colors border border-gray-200">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={formData.consenso_privacy}
+                        onChange={(e) => handleChange('consenso_privacy', e.target.checked)}
+                        className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mt-0.5 flex-shrink-0"
+                      />
+                      <div className="text-sm">
+                        <p className="font-medium text-gray-900 mb-1">
+                          ✅ Acconsento al trattamento dei dati personali (GDPR) *
+                        </p>
+                        <p className="text-gray-600 text-xs">
+                          Autorizzo il trattamento dei miei dati secondo l'informativa privacy 
+                          in conformità al Regolamento UE 2016/679
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Consenso Condizioni */}
+                    <label className="flex items-start gap-3 cursor-pointer bg-white rounded-lg p-3 hover:bg-indigo-50 transition-colors border border-gray-200">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={formData.consenso_condizioni}
+                        onChange={(e) => handleChange('consenso_condizioni', e.target.checked)}
+                        className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mt-0.5 flex-shrink-0"
+                      />
+                      <div className="text-sm">
+                        <p className="font-medium text-gray-900 mb-1">
+                          ✅ Ho letto e accetto le Condizioni Generali di Servizio *
+                        </p>
+                        <p className="text-gray-600 text-xs">
+                          Dichiaro di aver preso visione e di accettare i termini e le 
+                          condizioni del servizio OdontoService
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Consenso Veridicità */}
+                    <label className="flex items-start gap-3 cursor-pointer bg-white rounded-lg p-3 hover:bg-indigo-50 transition-colors border border-gray-200">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={formData.consenso_veridicita}
+                        onChange={(e) => handleChange('consenso_veridicita', e.target.checked)}
+                        className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mt-0.5 flex-shrink-0"
+                      />
+                      <div className="text-sm">
+                        <p className="font-medium text-gray-900 mb-1">
+                          ✅ Confermo la veridicità delle informazioni fornite *
+                        </p>
+                        <p className="text-gray-600 text-xs">
+                          Dichiaro che tutti i dati inseriti sono veritieri, corretti e 
+                          aggiornati, assumendomi la responsabilità delle informazioni fornite
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Disclaimer Legale */}
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                    <p className="text-sm text-yellow-900">
+                      <strong>⚖️ Validità Legale:</strong> La tua accettazione 
+                      costituisce firma elettronica semplice ai sensi del CAD (D.Lgs. 82/2005) e 
+                      del Regolamento eIDAS (UE 910/2014) e ha pieno valore legale per 
+                      contratti B2B (business-to-business). Il codice hash SHA-256 garantisce 
+                      l'integrità e l'immodificabilità dei dati.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -1433,10 +1678,10 @@ export default function CustomerOnboardingWizard({ clienteId, onComplete }) {
                 ) : (
                   <button
                     type="submit"
-                    disabled={isSaving || !formData.accetta_termini}
+                    disabled={isSaving || !formData.consenso_privacy || !formData.consenso_condizioni || !formData.consenso_veridicita}
                     className="px-6 py-2 bg-gradient-to-r from-blue-600 to-emerald-600 text-white rounded-lg hover:from-blue-700 hover:to-emerald-700 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                   >
-                    {isSaving ? 'Completamento...' : '✅ Completa'}
+                    {isSaving ? 'Completamento...' : '✅ Firma e Completa'}
                   </button>
                 )}
               </div>

@@ -77,7 +77,7 @@ export default function MacchinariPage() {
         .from('macchinari')
         .select(`
           *,
-          cliente:clienti!ticket_id_cliente_fkey(
+          cliente:clienti!macchinari_id_cliente_fkey(
             id,
             ragione_sociale,
             codice_cliente,
@@ -241,7 +241,7 @@ export default function MacchinariPage() {
                   </div>
 
                   {/* Info Cliente */}
-                  {macchinario.clienti && (
+                  {macchinario.cliente && (
                     <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
@@ -249,22 +249,22 @@ export default function MacchinariPage() {
                           <div className="flex items-start gap-4">
                             <div>
                               <p className="font-semibold text-gray-900 dark:text-white">
-                                {macchinario.clienti.ragione_sociale}
+                                {macchinario.cliente.ragione_sociale}
                               </p>
                               <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Cod. {macchinario.clienti.codice_cliente}
+                                Cod. {macchinario.cliente.codice_cliente}
                               </p>
                             </div>
-                            {macchinario.clienti.citta && (
+                            {macchinario.cliente.citta && (
                               <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
                                 <MapPin size={14} />
-                                <span>{macchinario.clienti.citta} ({macchinario.clienti.provincia})</span>
+                                <span>{macchinario.cliente.citta} ({macchinario.cliente.provincia})</span>
                               </div>
                             )}
                           </div>
                         </div>
                         <Link
-                          href={`/clienti/${macchinario.clienti.id}`}
+                          href={`/clienti/${macchinario.cliente.id}`}
                           className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm font-medium"
                         >
                           <span>Vedi Cliente</span>

@@ -97,7 +97,7 @@ export function CustomerAuthProvider({ children }) {
     try {
       console.log('📊 Caricamento profilo cliente:', userId)
       
-      // ✅ QUERY CORRETTA: Cerca in customer_portal_users
+      // ✅ QUERY CORRETTA: Cerca in customer_portal_users con JOIN a clienti
       const { data: customerUser, error: userError } = await supabase
         .from('customer_portal_users')
         .select(`
@@ -127,7 +127,7 @@ export function CustomerAuthProvider({ children }) {
         return
       }
 
-      console.log('✅ Profilo cliente caricato:', customerUser)
+      console.log('✅ Dati utente caricati:', customerUser)
       
       // Verifica se ha accesso attivo
       if (!customerUser.attivo) {
@@ -137,26 +137,41 @@ export function CustomerAuthProvider({ children }) {
         return
       }
 
-      // Combina i dati
+      // 🔧 FIX: Appiattisce i dati del cliente per accesso diretto
+      // Ora puoi usare customerProfile.ragione_sociale invece di customerProfile.cliente.ragione_sociale
       const profile = {
-        ...customerUser,
-        // Dati aziendali dal gestionale (tabella clienti)
-        ragione_sociale: customerUser.cliente?.ragione_sociale || customerUser.ragione_sociale,
-        partita_iva: customerUser.cliente?.partita_iva,
-        codice_fiscale: customerUser.cliente?.codice_fiscale,
-        indirizzo: customerUser.cliente?.indirizzo,
-        citta: customerUser.cliente?.citta,
-        cap: customerUser.cliente?.cap,
-        provincia: customerUser.cliente?.provincia,
-        telefono: customerUser.cliente?.telefono || customerUser.telefono,
-        email: customerUser.email,
-        pec: customerUser.cliente?.pec,
-        // Metadata
+        // Dati da customer_portal_users
+        id: customerUser.id,
         cliente_id: customerUser.cliente_id,
-        onboarding_completato: customerUser.cliente?.onboarding_completato || false
+        email: customerUser.email,
+        attivo: customerUser.attivo,
+        created_at: customerUser.created_at,
+        updated_at: customerUser.updated_at,
+        
+        // 🎯 DATI APPIATTITI dalla tabella clienti (copiati al primo livello)
+        ragione_sociale: customerUser.cliente?.ragione_sociale || '',
+        partita_iva: customerUser.cliente?.partita_iva || '',
+        codice_fiscale: customerUser.cliente?.codice_fiscale || '',
+        indirizzo: customerUser.cliente?.indirizzo || '',
+        citta: customerUser.cliente?.citta || '',
+        cap: customerUser.cliente?.cap || '',
+        provincia: customerUser.cliente?.provincia || '',
+        telefono: customerUser.cliente?.telefono || '',
+        email_cliente: customerUser.cliente?.email || customerUser.email, // Fallback a email auth
+        pec: customerUser.cliente?.pec || '',
+        email_amministrazione: customerUser.cliente?.email_amministrazione || '',
+        sito_web: customerUser.cliente?.sito_web || '',
+        note: customerUser.cliente?.note || '',
+        
+        // Metadata
+        onboarding_completato: customerUser.cliente?.onboarding_completato || false,
+        
+        // ✅ Mantieni anche l'oggetto cliente originale per retrocompatibilità
+        cliente: customerUser.cliente
       }
 
       setCustomerProfile(profile)
+      console.log('✅ Profilo cliente appiattito e caricato:', profile)
       
       // Verifica stato onboarding
       await checkOnboardingStatus(userId, customerUser.cliente_id)

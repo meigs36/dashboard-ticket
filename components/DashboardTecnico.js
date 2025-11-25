@@ -310,7 +310,7 @@ export default function DashboardTecnico() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <div className="flex items-center gap-3 mb-3 flex-wrap">
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -328,18 +328,24 @@ export default function DashboardTecnico() {
                         </span>
                       </div>
                       
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                        {ticket.oggetto}
-                      </h3>
+                      {/* 👤 NOME CLIENTE PROMINENTE */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <User size={18} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                          {ticket.cliente?.ragione_sociale || 'Cliente sconosciuto'}
+                        </h3>
+                      </div>
                       
-                      <p className="text-gray-700 dark:text-gray-300 mb-3 line-clamp-2">
+                      {/* Oggetto come Sottotitolo */}
+                      <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                        {ticket.oggetto}
+                      </h4>
+                      
+                      <p className="text-gray-700 dark:text-gray-300 mb-3 line-clamp-2 text-sm">
                         {ticket.descrizione}
                       </p>
                       
-                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                        <span>
-                          <strong>Cliente:</strong> {ticket.clienti?.ragione_sociale}
-                        </span>
+                      <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
                         <span>
                           <strong>Tempo:</strong> {getTempoDaApertura(ticket.data_apertura)}
                         </span>
@@ -378,7 +384,7 @@ export default function DashboardTecnico() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <div className="flex items-center gap-3 mb-3 flex-wrap">
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -396,18 +402,24 @@ export default function DashboardTecnico() {
                         </span>
                       </div>
                       
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                        {ticket.oggetto}
-                      </h3>
+                      {/* 👤 NOME CLIENTE PROMINENTE */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <User size={18} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                          {ticket.cliente?.ragione_sociale || 'Cliente sconosciuto'}
+                        </h3>
+                      </div>
                       
-                      <p className="text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                      {/* Oggetto come Sottotitolo */}
+                      <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                        {ticket.oggetto}
+                      </h4>
+                      
+                      <p className="text-gray-600 dark:text-gray-400 mb-3 line-clamp-2 text-sm">
                         {ticket.descrizione}
                       </p>
                       
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                        <span>
-                          <strong>Cliente:</strong> {ticket.clienti?.ragione_sociale}
-                        </span>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                         <span>
                           <strong>Tempo:</strong> {getTempoDaApertura(ticket.data_apertura)}
                         </span>
@@ -446,7 +458,7 @@ export default function DashboardTecnico() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <div className="flex items-center gap-3 mb-3 flex-wrap">
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -464,18 +476,24 @@ export default function DashboardTecnico() {
                         </span>
                       </div>
                       
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                        {ticket.oggetto}
-                      </h3>
+                      {/* 👤 NOME CLIENTE PROMINENTE */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <User size={18} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                          {ticket.cliente?.ragione_sociale || 'Cliente sconosciuto'}
+                        </h3>
+                      </div>
                       
-                      <p className="text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                      {/* Oggetto come Sottotitolo */}
+                      <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                        {ticket.oggetto}
+                      </h4>
+                      
+                      <p className="text-gray-600 dark:text-gray-400 mb-3 line-clamp-2 text-sm">
                         {ticket.descrizione}
                       </p>
                       
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                        <span>
-                          <strong>Cliente:</strong> {ticket.clienti?.ragione_sociale}
-                        </span>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                         <span>
                           <strong>Tempo:</strong> {getTempoDaApertura(ticket.data_apertura)}
                         </span>

@@ -140,9 +140,6 @@ export default function OnboardingPage() {
           // Step 4: Documenti (vuoto, da caricare nel wizard)
           documenti: [],
           
-          // Step 5: Conferma
-          accetta_termini: false,
-          
           // Metadata
           _clienteEsistente: true,
           _clienteId: clienteData.id,
@@ -166,15 +163,42 @@ export default function OnboardingPage() {
     }
   }, [user, authLoading])
 
-  // Handler completamento onboarding
-  const handleOnboardingComplete = () => {
-    console.log('🎉 Onboarding completato!')
-    setIsComplete(true)
+  // ==================== HANDLER COMPLETAMENTO ONBOARDING ====================
+  
+  const handleOnboardingComplete = async (wizardData) => {
+    console.log('📤 Invio dati onboarding all\'API...')
     
-    // Delay prima del redirect
-    setTimeout(() => {
-      router.push('/portal/dashboard')
-    }, 2000)
+    try {
+      // Chiama l'endpoint API per salvare tutto
+      const response = await fetch('/api/customer/onboarding/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(wizardData)
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Errore durante il salvataggio')
+      }
+
+      console.log('✅ Onboarding salvato con successo:', result)
+      
+      // Mostra schermata successo
+      setIsComplete(true)
+      
+      // Delay prima del redirect
+      setTimeout(() => {
+        router.push('/portal/dashboard')
+      }, 2000)
+
+    } catch (err) {
+      console.error('❌ Errore completamento onboarding:', err)
+      alert('Errore durante il salvataggio: ' + err.message + '\nRiprova o contatta il supporto.')
+      throw err // Rilancia l'errore per gestione nel wizard
+    }
   }
 
   // Loading state iniziale
@@ -239,7 +263,7 @@ export default function OnboardingPage() {
     if (!preloadedData?._clienteEsistente) return null
 
     return (
-      <div className="bg-green-50 border-l-4 border-green-500 p-6 mb-8">
+      <div className="bg-green-50 border-l-4 border-green-500 p-6 mb-8 rounded-r-lg">
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
             <CheckCircle2 className="w-6 h-6 text-green-600" />
@@ -283,7 +307,7 @@ export default function OnboardingPage() {
     if (!error) return null
 
     return (
-      <div className="bg-yellow-50 border-l-4 border-yellow-500 p-6 mb-8">
+      <div className="bg-yellow-50 border-l-4 border-yellow-500 p-6 mb-8 rounded-r-lg">
         <div className="flex items-start gap-4">
           <AlertCircle className="w-6 h-6 text-yellow-600 flex-shrink-0" />
           <div>
