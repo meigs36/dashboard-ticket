@@ -179,7 +179,7 @@ function NuovoTicketForm() {
               <option value="bassa">🟢 Bassa</option>
               <option value="media">🟡 Media</option>
               <option value="alta">🟠 Alta</option>
-              <option value="critica">🔴 Critica</option>
+              <option value="critica">🚨 Critica</option>
             </select>
           </div>
 

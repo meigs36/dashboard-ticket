@@ -663,7 +663,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
                     <option value="bassa">🟢 Bassa</option>
                     <option value="media">🟡 Media</option>
                     <option value="alta">🟠 Alta</option>
-                    <option value="critica">🔴 Critica</option>
+                    <option value="critica">🚨 Critica</option>
                   </select>
                   <button
                     onClick={handleCambiaPriorita}

@@ -3,14 +3,34 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { Plus, Clock, Calendar, User as UserIcon, Trash2, Briefcase, Gift, Edit2, Camera, Mic } from 'lucide-react'
+import { 
+  Plus, 
+  Clock, 
+  Calendar, 
+  User as UserIcon, 
+  Trash2, 
+  Briefcase, 
+  Gift, 
+  Edit2, 
+  Camera, 
+  Mic,
+  Receipt,        // ✅ NUOVO: Icona fattura
+  CheckCircle,    // ✅ NUOVO: Icona fatturato
+  Euro,           // ✅ NUOVO: Icona euro
+  Download,       // ✅ NUOVO: Icona download
+  Eye,            // ✅ NUOVO: Icona preview
+  ExternalLink,   // ✅ NUOVO: Icona link esterno
+  X               // ✅ NUOVO: Icona chiudi
+} from 'lucide-react'
 import AggiungiInterventoModal from './AggiungiInterventoModal'
 import ModificaInterventoModal from './ModificaInterventoModal'
-import InterventoMediaCapture from './InterventoMediaCapture' // Per audio/foto upload
-import InterventiAllegatiInline from './InterventiAllegatiInline' // ✅ Visualizza audio e foto inline
-import TrascrizioniSalvate from './TrascrizioniSalvate' // ✅ Visualizza trascrizioni permanenti salvate
+import InterventoMediaCapture from './InterventoMediaCapture'
+import InterventiAllegatiInline from './InterventiAllegatiInline'
+import TrascrizioniSalvate from './TrascrizioniSalvate'
+import GeneraFatturaModal from './GeneraFatturaModal'  // ✅ NUOVO: Modal fattura
 
 export default function InterventiTab({ ticket, onUpdate }) {
+  const { userProfile } = useAuth()
   const [interventi, setInterventi] = useState([])
   const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -18,9 +38,16 @@ export default function InterventiTab({ ticket, onUpdate }) {
   const [interventoSelezionato, setInterventoSelezionato] = useState(null)
   const [interventoMediaAperto, setInterventoMediaAperto] = useState(null)
   
-  // ❌ RIMOSSO: State per allegati e lightbox (ora gestiti da InterventiAllegatiInline)
-  // const [allegatiPerIntervento, setAllegatiPerIntervento] = useState({})
-  // const [lightboxImage, setLightboxImage] = useState(null)
+  // ✅ NUOVO: State per fatturazione
+  const [showFatturaModal, setShowFatturaModal] = useState(false)
+  const [interventiDaFatturare, setInterventiDaFatturare] = useState([])
+  const [clienteData, setClienteData] = useState(null)
+  
+  // ✅ NUOVO: State per preview PDF fattura
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewPdfUrl, setPreviewPdfUrl] = useState(null)
+  const [previewNumeroFattura, setPreviewNumeroFattura] = useState('')
+  const [loadingPreview, setLoadingPreview] = useState(false)
   
   const [totali, setTotali] = useState({
     oreEffettive: 0,
@@ -33,7 +60,24 @@ export default function InterventiTab({ ticket, onUpdate }) {
 
   useEffect(() => {
     loadInterventi()
+    loadClienteData()
   }, [ticket.id])
+
+  // ✅ NUOVO: Carica dati cliente per la fattura
+  async function loadClienteData() {
+    try {
+      const { data, error } = await supabase
+        .from('clienti')
+        .select('*')
+        .eq('id', ticket.id_cliente)
+        .single()
+
+      if (error) throw error
+      setClienteData(data)
+    } catch (error) {
+      console.error('❌ Errore caricamento cliente:', error)
+    }
+  }
 
   async function loadInterventi() {
     setLoading(true)
@@ -71,9 +115,6 @@ export default function InterventiTab({ ticket, onUpdate }) {
       })) || []
       
       setInterventi(interventiArricchiti)
-      
-      // ❌ RIMOSSO: Caricamento miniature (ora gestito da InterventiAllegatiInline)
-      // await loadAllegatiMiniature(interventiArricchiti)
       
       // Calcola totali
       if (interventiArricchiti.length > 0) {
@@ -134,13 +175,6 @@ export default function InterventiTab({ ticket, onUpdate }) {
     }
   }
 
-  // ❌ RIMOSSO: Funzione loadAllegatiMiniature (ora gestita da InterventiAllegatiInline)
-  /*
-  async function loadAllegatiMiniature(interventiList) {
-    // ... codice rimosso ...
-  }
-  */
-
   async function handleEliminaIntervento(interventoId) {
     if (!confirm('Sei sicuro di voler eliminare questo intervento?\n\nLe ore verranno rimborsate nel contratto.')) {
       return
@@ -160,6 +194,92 @@ export default function InterventiTab({ ticket, onUpdate }) {
     } catch (error) {
       console.error('Errore eliminazione:', error)
       alert('❌ Errore: ' + error.message)
+    }
+  }
+
+  // ✅ NUOVO: Apri modal per fatturare singolo intervento
+  function handleFatturaSingolo(intervento) {
+    setInterventiDaFatturare([intervento])
+    setShowFatturaModal(true)
+  }
+
+  // ✅ NUOVO: Apri modal per fatturare tutti gli interventi da fatturare
+  function handleFatturaTutti() {
+    const daFatturare = interventi.filter(i => {
+      if (i.is_cortesia || i.fatturato) return false
+      const durataAddebitata = parseFloat(i.durata_addebitata || 0)
+      const oreScalate = parseFloat(i.ore_scalate || 0)
+      return (durataAddebitata - oreScalate) > 0
+    })
+    
+    if (daFatturare.length === 0) {
+      alert('⚠️ Non ci sono interventi da fatturare')
+      return
+    }
+    
+    setInterventiDaFatturare(daFatturare)
+    setShowFatturaModal(true)
+  }
+
+  // ✅ NUOVO: Visualizza o scarica PDF fattura
+  async function handleFatturaPdf(numeroFattura, action = 'preview') {
+    try {
+      if (action === 'preview') {
+        setLoadingPreview(true)
+      }
+
+      // Cerca la fattura nel database
+      const { data: fattura, error } = await supabase
+        .from('fatture')
+        .select('storage_path, storage_bucket')
+        .eq('numero_fattura', numeroFattura)
+        .single()
+
+      if (error || !fattura) {
+        alert('❌ Fattura non trovata nel database')
+        return
+      }
+
+      if (!fattura.storage_path) {
+        alert('⚠️ PDF non ancora generato per questa fattura')
+        return
+      }
+
+      // Ottieni URL pubblico o firmato dal bucket
+      const bucket = fattura.storage_bucket || 'fatture-documenti'
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(fattura.storage_path, 3600) // URL valido 1 ora
+
+      if (urlError || !urlData?.signedUrl) {
+        console.error('Errore URL:', urlError)
+        alert('❌ Impossibile ottenere il link al PDF')
+        return
+      }
+
+      if (action === 'preview') {
+        // Apri modal con preview
+        setPreviewPdfUrl(urlData.signedUrl)
+        setPreviewNumeroFattura(numeroFattura)
+        setShowPreviewModal(true)
+      } else {
+        // Download diretto - fetch e forza download
+        const response = await fetch(urlData.signedUrl)
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `Fattura_${numeroFattura.replace('/', '-')}.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      }
+    } catch (error) {
+      console.error('❌ Errore accesso fattura:', error)
+      alert('❌ Errore: ' + error.message)
+    } finally {
+      setLoadingPreview(false)
     }
   }
 
@@ -253,7 +373,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
                           </span>
                         </div>
 
-                        {/* ⚡ BADGE MODALITÀ INTERVENTO - SEMPRE VISIBILE */}
+                        {/* Badge Modalità Intervento */}
                         {intervento.modalita_intervento && (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded flex-shrink-0 ${
                             intervento.modalita_intervento?.toLowerCase() === 'remoto' 
@@ -289,32 +409,49 @@ export default function InterventiTab({ ticket, onUpdate }) {
                             {intervento.num_contratto}
                           </span>
                         )}
+
+                        {/* ✅ NUOVO: Badge Fatturato - Cliccabile con Preview */}
+                        {intervento.fatturato && intervento.numero_fattura && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-l flex items-center gap-1 border border-green-200 dark:border-green-800">
+                              <CheckCircle size={12} />
+                              {intervento.numero_fattura}
+                            </span>
+                            <button
+                              onClick={() => handleFatturaPdf(intervento.numero_fattura, 'preview')}
+                              className="p-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800 rounded-r border border-l-0 border-green-200 dark:border-green-800 transition-colors"
+                              title="Visualizza fattura"
+                            >
+                              <Eye size={12} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       
-                      {/* Tecnico - NUOVA RIGA per mobile */}
+                      {/* Tecnico */}
                       <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">
                         <UserIcon size={14} className="flex-shrink-0" />
                         <span className="truncate">{intervento.tecnico_nome}</span>
                       </div>
 
-                      {/* Descrizione - Responsive */}
+                      {/* Descrizione */}
                       <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 mb-2 sm:mb-3 break-words whitespace-pre-wrap">
                         {intervento.descrizione_intervento || <span className="text-gray-400 dark:text-gray-600 italic">Nessuna descrizione</span>}
                       </p>
 
-                      {/* ✅ COMPONENTE TRASCRIZIONI SALVATE (Trascrizioni permanenti) - PRIMA */}
+                      {/* Trascrizioni Salvate */}
                       <TrascrizioniSalvate
                         interventoId={intervento.id}
                         onUpdate={loadInterventi}
                       />
 
-                      {/* ✅ COMPONENTE ALLEGATI INLINE (Audio e Foto sempre visibili) - DOPO */}
+                      {/* Allegati Inline */}
                       <InterventiAllegatiInline
                         interventoId={intervento.id}
                         onDelete={loadInterventi}
                       />
 
-                      {/* Pulsante Gestione Audio/Foto - Responsive */}
+                      {/* Pulsante Gestione Audio/Foto */}
                       <div className="mt-2 sm:mt-3">
                         <button
                           onClick={() => setInterventoMediaAperto(
@@ -333,21 +470,20 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         </button>
                       </div>
 
-                      {/* Sezione Gestione Media - Responsive */}
+                      {/* Sezione Gestione Media */}
                       {interventoMediaAperto === intervento.id && (
                         <div className="mt-3 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                           <InterventoMediaCapture 
                             interventoId={intervento.id}
                             onMediaUploaded={() => {
-                              // Ricarica quando viene caricato nuovo media
                               loadInterventi()
                             }}
                           />
                         </div>
                       )}
 
-                      {/* Info Fatturazione - Responsive */}
-                      <div className="mt-2 sm:mt-3 flex flex-wrap gap-3 sm:gap-4 text-[10px] sm:text-xs">
+                      {/* Info Fatturazione - CON PULSANTE FATTURA */}
+                      <div className="mt-2 sm:mt-3 flex flex-wrap items-center gap-3 sm:gap-4 text-[10px] sm:text-xs">
                         <div>
                           <span className="text-gray-500 dark:text-gray-500">Addebitate:</span>
                           <span className="ml-1 font-semibold text-blue-600 dark:text-blue-400">
@@ -365,23 +501,37 @@ export default function InterventiTab({ ticket, onUpdate }) {
                         )}
                         
                         {!intervento.is_cortesia && (
-                          <div>
-                            <span className="text-gray-500 dark:text-gray-500">
-                              {intervento.fatturato ? 'Fatturate:' : 'Da fatturare:'}
-                            </span>
-                            <span className={`ml-1 font-semibold ${
-                              intervento.fatturato 
-                                ? 'text-green-600 dark:text-green-400' 
-                                : 'text-orange-600 dark:text-orange-400'
-                            }`}>
-                              {formatDurata(oreDaFatturare > 0 ? oreDaFatturare : 0)}
-                            </span>
-                          </div>
+                          <>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-500">
+                                {intervento.fatturato ? 'Fatturate:' : 'Da fatturare:'}
+                              </span>
+                              <span className={`ml-1 font-semibold ${
+                                intervento.fatturato 
+                                  ? 'text-green-600 dark:text-green-400' 
+                                  : 'text-orange-600 dark:text-orange-400'
+                              }`}>
+                                {formatDurata(oreDaFatturare > 0 ? oreDaFatturare : 0)}
+                              </span>
+                            </div>
+
+                            {/* ✅ NUOVO: Pulsante fattura singolo intervento */}
+                            {!intervento.fatturato && oreDaFatturare > 0 && (
+                              <button
+                                onClick={() => handleFatturaSingolo(intervento)}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400 text-xs font-medium rounded transition-colors"
+                                title="Genera fattura per questo intervento"
+                              >
+                                <Receipt size={12} />
+                                <span className="hidden sm:inline">Fattura</span>
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
 
-                    {/* Pulsanti Azioni - Responsive */}
+                    {/* Pulsanti Azioni */}
                     <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 flex-shrink-0">
                       {/* Pulsante Modifica */}
                       <button
@@ -410,11 +560,25 @@ export default function InterventiTab({ ticket, onUpdate }) {
             })}
           </div>
 
-          {/* Totali */}
+          {/* Totali con pulsante FATTURA TUTTI */}
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
-              📊 Riepilogo Ticket
-            </h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-gray-900 dark:text-white">
+                📊 Riepilogo Ticket
+              </h4>
+              
+              {/* ✅ NUOVO: Pulsante fattura tutti */}
+              {totali.oreDaFatturare > 0 && (
+                <button
+                  onClick={handleFatturaTutti}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-sm font-medium rounded-lg transition-all shadow-md hover:shadow-lg"
+                >
+                  <Receipt size={18} />
+                  <span>Genera Fattura ({totali.oreDaFatturare.toFixed(1)}h)</span>
+                </button>
+              )}
+            </div>
+            
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {/* Ore lavorate */}
               <div>
@@ -449,17 +613,19 @@ export default function InterventiTab({ ticket, onUpdate }) {
                 </p>
               </div>
               
-              {/* Ore da fatturare */}
-              <div>
+              {/* Ore da fatturare - CON HIGHLIGHT SE > 0 */}
+              <div className={`${totali.oreDaFatturare > 0 ? 'bg-orange-100 dark:bg-orange-900/30 rounded-lg p-2 -m-2' : ''}`}>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                   Ore da fatturare
                 </p>
                 <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
                   {totali.oreDaFatturare.toFixed(1)}h
                 </p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
-                  (in loco)
-                </p>
+                {totali.oreDaFatturare > 0 && (
+                  <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 font-medium">
+                    💰 In attesa
+                  </p>
+                )}
               </div>
               
               {/* Ore già fatturate */}
@@ -471,7 +637,7 @@ export default function InterventiTab({ ticket, onUpdate }) {
                   {totali.oreFatturate.toFixed(1)}h
                 </p>
                 <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">
-                  (fatturate)
+                  ✅ (fatturate)
                 </p>
               </div>
               
@@ -520,7 +686,74 @@ export default function InterventiTab({ ticket, onUpdate }) {
         />
       )}
 
-      {/* ❌ RIMOSSO: Lightbox separato (ora gestito da InterventiAllegatiInline) */}
+      {/* ✅ NUOVO: Modal Genera Fattura */}
+      {showFatturaModal && interventiDaFatturare.length > 0 && clienteData && (
+        <GeneraFatturaModal
+          interventi={interventiDaFatturare}
+          ticket={ticket}
+          cliente={clienteData}
+          onClose={() => {
+            setShowFatturaModal(false)
+            setInterventiDaFatturare([])
+          }}
+          onSuccess={() => {
+            setShowFatturaModal(false)
+            setInterventiDaFatturare([])
+            loadInterventi()
+            onUpdate()
+          }}
+        />
+      )}
+
+      {/* ✅ NUOVO: Modal Preview PDF Fattura */}
+      {showPreviewModal && previewPdfUrl && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-t-xl">
+              <div className="flex items-center gap-3">
+                <Receipt size={24} />
+                <h2 className="text-xl font-bold">Fattura {previewNumeroFattura}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleFatturaPdf(previewNumeroFattura, 'download')}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-sm"
+                >
+                  <Download size={18} />
+                  Scarica PDF
+                </button>
+                <button
+                  onClick={() => window.open(previewPdfUrl, '_blank')}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-sm"
+                >
+                  <ExternalLink size={18} />
+                  Apri in nuova tab
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPreviewModal(false)
+                    setPreviewPdfUrl(null)
+                    setPreviewNumeroFattura('')
+                  }}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+            
+            {/* PDF Viewer */}
+            <div className="flex-1 p-2 bg-gray-100 dark:bg-gray-900">
+              <iframe
+                src={previewPdfUrl}
+                className="w-full h-full rounded-lg border border-gray-300 dark:border-gray-600"
+                title={`Fattura ${previewNumeroFattura}`}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
