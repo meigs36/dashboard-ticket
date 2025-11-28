@@ -1,11 +1,11 @@
 // app/portal/dashboard/page.js
-// Dashboard Clienti - Versione con KPI Cliccabili
+// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE
 //
 // 🔧 MODIFICHE APPLICATE (28 Nov 2025):
 // 1. ✅ KPI Cards cliccabili per navigare tra le sezioni
 // 2. ✅ Rimossa barra tab duplicata - navigazione solo via KPI
-// 3. ✅ Fix query ticket e contratti
-// 4. ✅ Design più pulito e moderno
+// 3. ✅ NUOVO: Sezione Fatture con download PDF
+// 4. ✅ Fix query ticket e contratti
 
 'use client'
 
@@ -19,7 +19,8 @@ import {
   Building2, Users, Wrench, FileText, LogOut,
   Mail, Phone, MapPin, CheckCircle2, AlertCircle,
   Download, Eye, Edit, Plus, Clock, Shield, Ticket,
-  ChevronRight, ArrowLeft
+  ChevronRight, ArrowLeft, Receipt, Euro, Calendar,
+  CreditCard, FileCheck, X
 } from 'lucide-react'
 
 export default function CustomerDashboard() {
@@ -28,14 +29,18 @@ export default function CustomerDashboard() {
 
   // Stati
   const [loading, setLoading] = useState(true)
-  const [activeSection, setActiveSection] = useState('overview') // overview, tickets, referenti, macchinari, documenti
+  const [activeSection, setActiveSection] = useState('overview')
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null)
+  const [pdfViewerTitle, setPdfViewerTitle] = useState('')
   const [dashboardData, setDashboardData] = useState({
     cliente: customerProfile || null,
     referenti: [],
     macchinari: [],
     documenti: [],
     contratti: [],
-    tickets: []
+    tickets: [],
+    fatture: []  // ✅ NUOVO
   })
 
   // Protezione route
@@ -99,7 +104,7 @@ export default function CustomerDashboard() {
         .limit(5)
 
       // Carica tickets
-      const { data: ticketsData, error: ticketsError } = await supabase
+      const { data: ticketsData } = await supabase
         .from('ticket')
         .select(`
           id,
@@ -117,8 +122,18 @@ export default function CustomerDashboard() {
         .order('data_apertura', { ascending: false })
         .limit(20)
 
-      if (ticketsError) {
-        console.error('❌ Errore caricamento ticket:', ticketsError)
+      // ✅ NUOVO: Carica fatture
+      const { data: fattureData, error: fattureError } = await supabase
+        .from('fatture')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('data_emissione', { ascending: false })
+        .limit(20)
+
+      if (fattureError) {
+        console.error('❌ Errore caricamento fatture:', fattureError)
+      } else {
+        console.log('✅ Fatture caricate:', fattureData?.length || 0)
       }
 
       setDashboardData({
@@ -127,7 +142,8 @@ export default function CustomerDashboard() {
         macchinari: macchinariData || [],
         documenti: documentiData || [],
         contratti: contrattiData || [],
-        tickets: ticketsData || []
+        tickets: ticketsData || [],
+        fatture: fattureData || []
       })
       
       console.log('✅ Dashboard caricata')
@@ -141,6 +157,43 @@ export default function CustomerDashboard() {
   const handleLogout = async () => {
     await signOut()
     router.push('/portal')
+  }
+
+  // Helper per visualizzare fattura PDF in modal
+  const downloadFattura = async (fattura) => {
+    try {
+      // Usa storage_path dalla fattura, o costruisci il path
+      const pdfPath = fattura.storage_path || `fatture/${fattura.anno || new Date().getFullYear()}/fattura_${fattura.numero_fattura.replace('/', '-')}.pdf`
+      const bucket = fattura.storage_bucket || 'fatture-documenti'
+      
+      console.log('📄 Download fattura:', { bucket, pdfPath, fattura })
+      
+      // Per bucket privati usa createSignedUrl
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(pdfPath, 300) // URL valido per 5 minuti
+      
+      console.log('📄 Signed URL response:', { signedData, signedError })
+      
+      if (signedError) {
+        console.error('Errore creazione signed URL:', signedError)
+        alert(`Errore nel download della fattura: ${signedError.message}`)
+        return
+      }
+      
+      if (signedData?.signedUrl) {
+        console.log('📄 Apertura modal con URL:', signedData.signedUrl)
+        setPdfViewerUrl(signedData.signedUrl)
+        setPdfViewerTitle(`Fattura ${fattura.numero_fattura}`)
+        setPdfViewerOpen(true)
+        return
+      }
+      
+      alert('Impossibile generare il link per il download')
+    } catch (err) {
+      console.error('Errore download fattura:', err)
+      alert('Errore nel download della fattura')
+    }
   }
 
   // Helper per badge stato ticket
@@ -172,6 +225,29 @@ export default function CustomerDashboard() {
     return labels[stato] || stato
   }
 
+  // Helper per badge stato fattura
+  const getStatoFatturaBadge = (stato) => {
+    const badges = {
+      emessa: 'bg-blue-100 text-blue-800',
+      inviata: 'bg-purple-100 text-purple-800',
+      pagata: 'bg-green-100 text-green-800',
+      scaduta: 'bg-red-100 text-red-800',
+      annullata: 'bg-gray-100 text-gray-600'
+    }
+    return badges[stato] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getStatoFatturaLabel = (stato) => {
+    const labels = {
+      emessa: 'Emessa',
+      inviata: 'Inviata',
+      pagata: 'Pagata',
+      scaduta: 'Scaduta',
+      annullata: 'Annullata'
+    }
+    return labels[stato] || stato
+  }
+
   // Loading state
   if (authLoading || loading) {
     return (
@@ -184,11 +260,16 @@ export default function CustomerDashboard() {
     )
   }
 
-  const { cliente, referenti, macchinari, documenti, contratti, tickets } = dashboardData
+  const { cliente, referenti, macchinari, documenti, contratti, tickets, fatture } = dashboardData
 
   // Calcola ticket aperti
   const ticketAperti = tickets.filter(t => 
     !['chiuso', 'risolto', 'annullato'].includes(t.stato)
+  ).length
+
+  // Calcola fatture non pagate
+  const fattureNonPagate = fatture.filter(f => 
+    f.stato !== 'pagata' && f.stato !== 'annullata'
   ).length
 
   return (
@@ -277,93 +358,114 @@ export default function CustomerDashboard() {
           </div>
         </div>
 
-        {/* KPI Cards CLICCABILI */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        {/* KPI Cards CLICCABILI - 6 CARDS */}
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
           
           {/* Card 1: Dati Azienda */}
           <button
             onClick={() => setActiveSection('overview')}
-            className={`bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-blue-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
               activeSection === 'overview' ? 'ring-2 ring-blue-500 ring-offset-2' : ''
             }`}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-blue-600" />
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-blue-600" />
               </div>
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
             </div>
-            <h3 className="text-sm font-medium text-gray-600 mb-1">Dati Azienda</h3>
-            <p className="text-2xl font-bold text-gray-900">Completi</p>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Dati Azienda</h3>
+            <p className="text-xl font-bold text-gray-900">Completi</p>
           </button>
 
           {/* Card 2: Referenti */}
           <button
             onClick={() => setActiveSection('referenti')}
-            className={`bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-green-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
               activeSection === 'referenti' ? 'ring-2 ring-green-500 ring-offset-2' : ''
             }`}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Users className="w-6 h-6 text-green-600" />
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Users className="w-5 h-5 text-green-600" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-gray-600 mb-1">Referenti</h3>
-            <p className="text-2xl font-bold text-gray-900">{referenti.length}</p>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Referenti</h3>
+            <p className="text-xl font-bold text-gray-900">{referenti.length}</p>
           </button>
 
           {/* Card 3: Macchinari */}
           <button
             onClick={() => setActiveSection('macchinari')}
-            className={`bg-white rounded-xl shadow-sm p-6 border-l-4 border-amber-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-amber-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
               activeSection === 'macchinari' ? 'ring-2 ring-amber-500 ring-offset-2' : ''
             }`}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                <Wrench className="w-6 h-6 text-amber-600" />
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                <Wrench className="w-5 h-5 text-amber-600" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-gray-600 mb-1">Macchinari</h3>
-            <p className="text-2xl font-bold text-gray-900">{macchinari.length}</p>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Macchinari</h3>
+            <p className="text-xl font-bold text-gray-900">{macchinari.length}</p>
           </button>
 
           {/* Card 4: Documenti */}
           <button
             onClick={() => setActiveSection('documenti')}
-            className={`bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-purple-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
               activeSection === 'documenti' ? 'ring-2 ring-purple-500 ring-offset-2' : ''
             }`}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-purple-600" />
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <FileText className="w-5 h-5 text-purple-600" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-gray-600 mb-1">Documenti</h3>
-            <p className="text-2xl font-bold text-gray-900">{documenti.length}</p>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Documenti</h3>
+            <p className="text-xl font-bold text-gray-900">{documenti.length}</p>
           </button>
 
           {/* Card 5: Ticket */}
           <button
             onClick={() => setActiveSection('tickets')}
-            className={`bg-white rounded-xl shadow-sm p-6 border-l-4 border-red-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-red-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
               activeSection === 'tickets' ? 'ring-2 ring-red-500 ring-offset-2' : ''
             }`}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <Ticket className="w-6 h-6 text-red-600" />
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <Ticket className="w-5 h-5 text-red-600" />
               </div>
               {ticketAperti > 0 && (
-                <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
-                  {ticketAperti} aperti
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                  {ticketAperti}
                 </span>
               )}
             </div>
-            <h3 className="text-sm font-medium text-gray-600 mb-1">Ticket</h3>
-            <p className="text-2xl font-bold text-gray-900">{tickets.length}</p>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Ticket</h3>
+            <p className="text-xl font-bold text-gray-900">{tickets.length}</p>
+          </button>
+
+          {/* ✅ NUOVO: Card 6: Fatture */}
+          <button
+            onClick={() => setActiveSection('fatture')}
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-emerald-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+              activeSection === 'fatture' ? 'ring-2 ring-emerald-500 ring-offset-2' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-emerald-600" />
+              </div>
+              {fattureNonPagate > 0 && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+                  {fattureNonPagate}
+                </span>
+              )}
+            </div>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Fatture</h3>
+            <p className="text-xl font-bold text-gray-900">{fatture.length}</p>
           </button>
         </div>
 
@@ -478,7 +580,7 @@ export default function CustomerDashboard() {
               </div>
 
               {/* Ticket Recenti - Anteprima */}
-              <div className="bg-white rounded-xl shadow-sm p-6 lg:col-span-2">
+              <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">
                     Ticket Recenti
@@ -498,52 +600,186 @@ export default function CustomerDashboard() {
                       <div 
                         key={ticket.id}
                         onClick={() => setActiveSection('tickets')}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            ticket.stato === 'aperto' ? 'bg-blue-100' :
-                            ticket.stato === 'in_lavorazione' ? 'bg-amber-100' :
-                            ticket.stato === 'risolto' ? 'bg-green-100' : 'bg-gray-100'
-                          }`}>
-                            <Ticket className={`w-5 h-5 ${
-                              ticket.stato === 'aperto' ? 'text-blue-600' :
-                              ticket.stato === 'in_lavorazione' ? 'text-amber-600' :
-                              ticket.stato === 'risolto' ? 'text-green-600' : 'text-gray-600'
-                            }`} />
-                          </div>
+                        <div className="flex items-center gap-3">
+                          <Ticket className={`w-5 h-5 ${
+                            ticket.stato === 'aperto' ? 'text-blue-600' :
+                            ticket.stato === 'in_lavorazione' ? 'text-amber-600' :
+                            ticket.stato === 'risolto' ? 'text-green-600' : 'text-gray-600'
+                          }`} />
                           <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono text-gray-500">
-                                {ticket.numero_ticket}
-                              </span>
-                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
-                                {getStatoLabel(ticket.stato)}
-                              </span>
-                            </div>
-                            <p className="font-medium text-gray-900 mt-1">
-                              {ticket.oggetto}
-                            </p>
+                            <p className="font-medium text-gray-900 text-sm">{ticket.oggetto}</p>
+                            <p className="text-xs text-gray-500">{ticket.numero_ticket}</p>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
+                          {getStatoLabel(ticket.stato)}
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <Ticket className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 mb-4">Nessun ticket</p>
-                    <Link
-                      href="/portal/ticket/nuovo"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Apri il tuo primo ticket
-                    </Link>
+                  <div className="text-center py-6">
+                    <Ticket className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">Nessun ticket</p>
                   </div>
                 )}
               </div>
+
+              {/* ✅ NUOVO: Fatture Recenti - Anteprima */}
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Fatture Recenti
+                  </h3>
+                  <button
+                    onClick={() => setActiveSection('fatture')}
+                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                  >
+                    Vedi tutte
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                {fatture.length > 0 ? (
+                  <div className="space-y-3">
+                    {fatture.slice(0, 3).map((fattura) => (
+                      <div 
+                        key={fattura.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Receipt className="w-5 h-5 text-emerald-600" />
+                          <div>
+                            <p className="font-medium text-gray-900 text-sm">{fattura.numero_fattura}</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(fattura.data_emissione).toLocaleDateString('it-IT')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-900">€ {fattura.totale?.toFixed(2)}</p>
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoFatturaBadge(fattura.stato)}`}>
+                            {getStatoFatturaLabel(fattura.stato)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">Nessuna fattura</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ✅ NUOVO: FATTURE SECTION */}
+          {activeSection === 'fatture' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveSection('overview')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Le Mie Fatture
+                  </h3>
+                </div>
+              </div>
+
+              {fatture.length > 0 ? (
+                <div className="space-y-4">
+                  {fatture.map((fattura) => (
+                    <div
+                      key={fattura.id}
+                      className="p-5 border border-gray-200 rounded-xl hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Receipt className="w-6 h-6 text-emerald-600" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-semibold text-gray-900">
+                                {fattura.numero_fattura}
+                              </h4>
+                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoFatturaBadge(fattura.stato)}`}>
+                                {getStatoFatturaLabel(fattura.stato)}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-4 h-4" />
+                                Emessa: {new Date(fattura.data_emissione).toLocaleDateString('it-IT')}
+                              </span>
+                              {fattura.data_scadenza && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  Scadenza: {new Date(fattura.data_scadenza).toLocaleDateString('it-IT')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-sm text-gray-500">Totale</p>
+                            <p className="text-xl font-bold text-gray-900">
+                              € {fattura.totale?.toFixed(2)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => downloadFattura(fattura)}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                          >
+                            <Download className="w-4 h-4" />
+                            <span className="hidden sm:inline">PDF</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dettagli fattura */}
+                      <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Imponibile</p>
+                          <p className="font-medium text-gray-900">€ {fattura.imponibile?.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">IVA ({fattura.iva_percentuale || 22}%)</p>
+                          <p className="font-medium text-gray-900">€ {fattura.iva_importo?.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Ore lavorate</p>
+                          <p className="font-medium text-gray-900">{fattura.ore_totali || '-'}h</p>
+                        </div>
+                        {fattura.stato === 'pagata' && fattura.data_pagamento && (
+                          <div>
+                            <p className="text-gray-500">Pagata il</p>
+                            <p className="font-medium text-green-600">
+                              {new Date(fattura.data_pagamento).toLocaleDateString('it-IT')}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-2">Nessuna fattura disponibile</p>
+                  <p className="text-sm text-gray-400">Le fatture appariranno qui dopo gli interventi</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -621,11 +857,6 @@ export default function CustomerDashboard() {
                               : 'bg-gray-100 text-gray-600'
                           }`}>
                             Priorità: {ticket.priorita}
-                          </span>
-                        )}
-                        {ticket.data_chiusura && (
-                          <span className="text-xs text-green-600">
-                            Chiuso il {new Date(ticket.data_chiusura).toLocaleDateString('it-IT')}
                           </span>
                         )}
                       </div>
@@ -771,21 +1002,7 @@ export default function CustomerDashboard() {
                             </p>
                           </div>
                         )}
-                        {macch.ubicazione && (
-                          <div className="col-span-2">
-                            <p className="text-gray-500">Ubicazione</p>
-                            <p className="font-medium text-gray-900">{macch.ubicazione}</p>
-                          </div>
-                        )}
                       </div>
-                      {macch.contratto_manutenzione && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Contratto Manutenzione Attivo
-                          </span>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -813,7 +1030,7 @@ export default function CustomerDashboard() {
                     <ArrowLeft className="w-5 h-5 text-gray-600" />
                   </button>
                   <h3 className="text-lg font-semibold text-gray-900">
-                    Documenti e Contratti
+                    Documenti
                   </h3>
                 </div>
               </div>
@@ -889,6 +1106,56 @@ export default function CustomerDashboard() {
         </div>
 
       </main>
+
+      {/* Modal PDF Viewer */}
+      {pdfViewerOpen && pdfViewerUrl && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Receipt className="w-5 h-5 text-emerald-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">{pdfViewerTitle}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Pulsante Download */}
+                <a
+                  href={pdfViewerUrl}
+                  download={`${pdfViewerTitle.replace(/\s+/g, '_')}.pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Scarica
+                </a>
+                {/* Pulsante Chiudi */}
+                <button
+                  onClick={() => {
+                    setPdfViewerOpen(false)
+                    setPdfViewerUrl(null)
+                    setPdfViewerTitle('')
+                  }}
+                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            </div>
+            
+            {/* PDF Viewer */}
+            <div className="flex-1 bg-gray-100">
+              <iframe
+                src={pdfViewerUrl}
+                className="w-full h-full"
+                title={pdfViewerTitle}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
