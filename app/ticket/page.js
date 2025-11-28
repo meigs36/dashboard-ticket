@@ -44,37 +44,57 @@ export default function TicketPage() {
   }, [tickets])
 
   async function loadTickets() {
-    try {
-      const { data, error } = await supabase
-        .from('ticket')
-        .select(`
-          *,
-          cliente:clienti!ticket_id_cliente_fkey(
-            id,
-            ragione_sociale, 
-            codice_cliente,
-            telefono_principale,
-            email_riparazioni,
-            citta,
-            provincia
-          ),
-          macchinari(
-            tipo_macchinario, 
-            numero_seriale,
-            marca,
-            modello
-          )
-        `)
-        .order('data_apertura', { ascending: false })
+  try {
+    const { data, error } = await supabase
+      .from('ticket')
+      .select(`
+        id,
+        numero_ticket,
+        oggetto,
+        descrizione,
+        stato,
+        priorita,
+        categoria,
+        canale_origine,
+        data_apertura,
+        data_chiusura,
+        id_cliente,
+        id_macchinario,
+        id_tecnico_assegnato,
+        is_critico,
+        sla_scadenza,
+        data_creazione,
+        data_modifica,
+        cliente:clienti!ticket_id_cliente_fkey(
+          id,
+          ragione_sociale, 
+          codice_cliente,
+          telefono_principale,
+          email_riparazioni,
+          citta,
+          provincia
+        ),
+        macchinari(
+          tipo_macchinario, 
+          numero_seriale,
+          marca,
+          modello
+        )
+      `)
+      .order('data_apertura', { ascending: false })
 
-      if (error) throw error
-      setTickets(data || [])
-    } catch (error) {
-      console.error('Errore caricamento ticket:', error)
-    } finally {
-      setLoading(false)
-    }
+    if (error) throw error
+    
+    // Debug: verifica che descrizione sia presente
+    console.log('🎫 Primo ticket caricato:', data?.[0]?.numero_ticket, 'descrizione:', data?.[0]?.descrizione)
+    
+    setTickets(data || [])
+  } catch (error) {
+    console.error('Errore caricamento ticket:', error)
+  } finally {
+    setLoading(false)
   }
+}
 
   // ⚡ NUOVA FUNZIONE: Carica lista tecnici dalla tabella utenti
   async function loadTecnici() {

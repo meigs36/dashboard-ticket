@@ -96,18 +96,35 @@ export default function DashboardAdmin() {
   }
 
   async function loadRecentTickets() {
-    try {
-      const { data } = await supabase
-        .from('ticket')
-        .select('id, numero_ticket, oggetto, stato, priorita, data_apertura, cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)')
-        .order('data_apertura', { ascending: false })
-        .limit(5)
+  try {
+    const { data } = await supabase
+      .from('ticket')
+      .select(`
+        *,
+        cliente:clienti!ticket_id_cliente_fkey(
+          id,
+          ragione_sociale,
+          codice_cliente,
+          telefono_principale,
+          email_riparazioni,
+          citta,
+          provincia
+        ),
+        macchinari(
+          tipo_macchinario,
+          numero_seriale,
+          marca,
+          modello
+        )
+      `)
+      .order('data_apertura', { ascending: false })
+      .limit(5)
 
-      setRecentTickets(data || [])
-    } catch (error) {
-      console.error('Errore caricamento recent tickets:', error)
-    }
+    setRecentTickets(data || [])
+  } catch (error) {
+    console.error('Errore caricamento recent tickets:', error)
   }
+}
 
   const getPrioritaBadge = (priorita) => {
     const badges = {
