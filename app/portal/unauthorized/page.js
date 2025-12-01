@@ -55,7 +55,7 @@ export default function UnauthorizedPage() {
 
         {/* Footer info */}
         <p className="text-center text-sm text-gray-500 mt-6">
-          OdontoService Customer Portal<br />
+          Odonto Service Customer Portal<br />
           Per assistenza: assistenza@odontoservice.it
         </p>
       </div>

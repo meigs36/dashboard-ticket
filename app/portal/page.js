@@ -12,7 +12,8 @@ import toast from 'react-hot-toast'
 
 export default function PortalPage() {
   const router = useRouter()
-  const { signIn, user, customerProfile, authLoading } = useCustomerAuth()
+  // ✅ FIX: Aggiunto signOut e corretto loading (era authLoading nel context è "loading")
+  const { signIn, signOut, user, customerProfile, loading: authLoading } = useCustomerAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -39,8 +40,8 @@ export default function PortalPage() {
     }
   }
 
+  // ✅ FIX: Rimosso useCustomerAuth() da dentro la funzione (violava le regole degli Hooks)
   const handleLogout = async () => {
-    const { signOut } = useCustomerAuth()
     await signOut()
     toast.success('Logout effettuato')
   }
@@ -67,7 +68,7 @@ export default function PortalPage() {
             <div className="flex items-center gap-3">
               <Image 
                 src="/Logo.webp" 
-                alt="OdontoService" 
+                alt="Odonto Service" 
                 width={100}
                 height={75}
                 className="object-contain"
@@ -208,7 +209,7 @@ export default function PortalPage() {
           <div className="flex items-center">
             <Image 
               src="/Logo.webp" 
-              alt="OdontoService" 
+              alt="Odonto Service" 
               width={120}
               height={90}
               className="object-contain drop-shadow-md"
@@ -229,7 +230,7 @@ export default function PortalPage() {
           <div>
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
               Portale Clienti<br />
-              <span className="text-blue-600">OdontoService</span>
+              <span className="text-blue-600">Odonto Service</span>
             </h1>
             <p className="text-xl text-gray-600 mb-8 leading-relaxed">
               Gestisci la tua assistenza tecnica in modo semplice e veloce. 
