@@ -252,10 +252,10 @@ export default function PortalPage() {
               Funzionalità
             </button>
             <button 
-              onClick={() => scrollToSection('how-it-works')} 
+              onClick={() => scrollToSection('activation')} 
               className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
             >
-              Come Funziona
+              Attivazione
             </button>
             <button 
               onClick={() => scrollToSection('contact')} 
@@ -495,12 +495,12 @@ export default function PortalPage() {
         </div>
       </section>
 
-      {/* ===== HOW IT WORKS ===== */}
-      <section id="how-it-works" className="py-20 bg-gradient-to-br from-blue-600 to-blue-800">
+      {/* ===== ACTIVATION SECTION ===== */}
+      <section id="activation" className="py-20 bg-gradient-to-br from-blue-600 to-blue-800">
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Come Funziona
+              Attivazione
             </h2>
             <p className="text-xl text-blue-100 max-w-2xl mx-auto">
               In pochi semplici passaggi avrai accesso completo al tuo portale
@@ -654,14 +654,14 @@ export default function PortalPage() {
             
             {/* Phone */}
             <a 
-              href="tel:+390544949554" 
+              href="tel:+390110000000" 
               className="group p-8 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 hover:shadow-xl transition-all duration-300 text-center"
             >
               <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform">
                 <Phone className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Telefono</h3>
-              <p className="text-blue-600 font-semibold text-lg">+39 0544 959454</p>
+              <p className="text-blue-600 font-semibold text-lg">011 000 0000</p>
               <p className="text-gray-500 text-sm mt-2">Lun-Ven: 8:30-18:00</p>
             </a>
 
@@ -684,8 +684,8 @@ export default function PortalPage() {
                 <MapPin className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Sede</h3>
-              <p className="text-gray-600">Viale Romagna 248-250</p>
-              <p className="text-gray-600">48125 Lido di Savio (RA)</p>
+              <p className="text-gray-600">Via Example 123</p>
+              <p className="text-gray-600">10100 Torino (TO)</p>
             </div>
 
           </div>
@@ -722,8 +722,8 @@ export default function PortalPage() {
                   </button>
                 </li>
                 <li>
-                  <button onClick={() => scrollToSection('how-it-works')} className="text-gray-400 hover:text-white transition-colors">
-                    Come Funziona
+                  <button onClick={() => scrollToSection('activation')} className="text-gray-400 hover:text-white transition-colors">
+                    Attivazione
                   </button>
                 </li>
                 <li>
@@ -763,7 +763,7 @@ export default function PortalPage() {
               © {new Date().getFullYear()} Odonto Service S.r.l. - Tutti i diritti riservati
             </p>
             <p className="text-gray-500 text-sm">
-              P.IVA: 00595400391 | REA: TO-000000
+              P.IVA: 00000000000 | REA: TO-000000
             </p>
           </div>
         </div>
