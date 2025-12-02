@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'  // AGGIUNTO
 import { 
   ArrowLeft, 
   Calendar, 
@@ -19,16 +20,19 @@ import {
   Phone,
   Mail,
   Package,
-  Wrench
+  Wrench,
+  MessageSquare  // AGGIUNTO per icona note
 } from 'lucide-react'
 import Link from 'next/link'
 import TicketActionsModal from '@/components/TicketActionsModal'
 import InterventiTab from '@/components/InterventiTab'
+import NoteTicketForm from '@/components/NoteTicketForm'  // AGGIUNTO
 
 export default function TicketDetailPage() {
   const router = useRouter()
   const params = useParams()
   const ticketId = params.id
+  const { userProfile } = useAuth()  // AGGIUNTO
 
   const [ticket, setTicket] = useState(null)
   const [cliente, setCliente] = useState(null)
@@ -36,10 +40,15 @@ export default function TicketDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [mostraModalAzioni, setMostraModalAzioni] = useState(false)
+  
+  // AGGIUNTO: stato per note
+  const [noteTicket, setNoteTicket] = useState([])
+  const [loadingNote, setLoadingNote] = useState(false)
 
   useEffect(() => {
     if (ticketId) {
       loadTicket()
+      loadNoteTicket()  // AGGIUNTO
     }
   }, [ticketId])
 
@@ -93,9 +102,38 @@ export default function TicketDetailPage() {
     }
   }
 
+  // AGGIUNTO: Funzione per caricare le note
+  async function loadNoteTicket() {
+    try {
+      setLoadingNote(true)
+      
+      const { data, error } = await supabase
+        .from('ticket_note')
+        .select(`
+          *,
+          utente:id_utente(nome, cognome)
+        `)
+        .eq('id_ticket', ticketId)
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      setNoteTicket(data || [])
+      
+    } catch (err) {
+      console.error('Errore caricamento note:', err)
+    } finally {
+      setLoadingNote(false)
+    }
+  }
+
   function handleTicketUpdate() {
     loadTicket()
     setMostraModalAzioni(false)
+  }
+
+  // AGGIUNTO: Handler per quando viene aggiunta una nota
+  function handleNotaAggiunta(nota) {
+    loadNoteTicket()  // Ricarica le note
   }
 
   function getStatoColor(stato) {
@@ -151,6 +189,28 @@ export default function TicketDetailPage() {
       'altro': 'Altro'
     }
     return labels[categoria] || categoria
+  }
+
+  // AGGIUNTO: Helper per formattare il tipo nota
+  function getTipoNotaLabel(tipo) {
+    const labels = {
+      'nota_interna': '🔒 Nota Interna',
+      'commento_cliente': '💬 Nota al Cliente',
+      'cambio_stato': '🔄 Cambio Stato',
+      'assegnazione': '👤 Assegnazione'
+    }
+    return labels[tipo] || tipo
+  }
+
+  // AGGIUNTO: Helper per colore tipo nota
+  function getTipoNotaColor(tipo) {
+    switch (tipo) {
+      case 'nota_interna': return 'bg-amber-100 text-amber-800 border-amber-200'
+      case 'commento_cliente': return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'cambio_stato': return 'bg-purple-100 text-purple-800 border-purple-200'
+      case 'assegnazione': return 'bg-green-100 text-green-800 border-green-200'
+      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
   }
 
   if (loading) {
@@ -217,15 +277,16 @@ export default function TicketDetailPage() {
               onClick={() => setMostraModalAzioni(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <Settings size={20} />
+              <Settings size={18} />
               Gestisci Ticket
             </button>
           </div>
         </div>
 
+        {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Colonna sinistra - Informazioni */}
-          <div className="lg:col-span-1 space-y-6">
+          {/* Colonna sinistra - Info */}
+          <div className="space-y-6">
             {/* Card Stato e Priorità */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -233,42 +294,34 @@ export default function TicketDetailPage() {
               </h2>
 
               <div className="space-y-4">
-                {/* Stato */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Stato</span>
-                  <div className="flex items-center gap-2">
-                    {getStatoIcon(ticket.stato)}
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatoColor(ticket.stato)}`}>
-                      {ticket.stato?.replace('_', ' ').toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Priorità */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Priorità</span>
-                  <div className="flex items-center gap-2">
-                    <span>{getPrioritaIcon(ticket.priorita)}</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPrioritaColor(ticket.priorita)}`}>
-                      {ticket.priorita?.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Categoria */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Categoria</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {getCategoriaLabel(ticket.categoria)}
+                  <span className="text-gray-600 dark:text-gray-400">Stato</span>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatoColor(ticket.stato)}`}>
+                    {ticket.stato?.replace('_', ' ').toUpperCase()}
                   </span>
                 </div>
 
-                {/* Canale Origine */}
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Priorità</span>
+                  <span className={`font-medium ${getPrioritaColor(ticket.priorita)}`}>
+                    {getPrioritaIcon(ticket.priorita)} {ticket.priorita?.toUpperCase()}
+                  </span>
+                </div>
+
+                {ticket.categoria && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Categoria</span>
+                    <span className="text-gray-900 dark:text-white font-medium">
+                      {getCategoriaLabel(ticket.categoria)}
+                    </span>
+                  </div>
+                )}
+
                 {ticket.canale_origine && (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Canale</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {ticket.canale_origine.replace('_', ' ')}
+                    <span className="text-gray-600 dark:text-gray-400">Origine</span>
+                    <span className="text-gray-900 dark:text-white capitalize">
+                      {ticket.canale_origine?.replace('_', ' ')}
                     </span>
                   </div>
                 )}
@@ -475,6 +528,84 @@ export default function TicketDetailPage() {
                 </p>
               </div>
             )}
+
+            {/* ========== SEZIONE NOTE - AGGIUNTA ========== */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <MessageSquare size={20} />
+                Note e Comunicazioni
+              </h2>
+
+              {/* Form per aggiungere nota */}
+              {userProfile && ticket && cliente && (
+                <NoteTicketForm
+                  ticketId={ticket.id}
+                  clienteId={cliente.id}
+                  utente={userProfile}
+                  onNotaAggiunta={handleNotaAggiunta}
+                />
+              )}
+
+              {/* Lista note esistenti */}
+              <div className="mt-6">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Storico Note ({noteTicket.length})
+                </h3>
+
+                {loadingNote ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="animate-spin text-gray-400" size={24} />
+                  </div>
+                ) : noteTicket.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                    Nessuna nota presente
+                  </p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {noteTicket.map((nota) => (
+                      <div 
+                        key={nota.id} 
+                        className={`p-4 rounded-lg border ${getTipoNotaColor(nota.tipo)}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <span className="text-xs font-medium">
+                            {getTipoNotaLabel(nota.tipo)}
+                          </span>
+                          <span className="text-xs opacity-75">
+                            {new Date(nota.created_at).toLocaleString('it-IT', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        
+                        <p className="text-sm whitespace-pre-wrap">
+                          {nota.contenuto}
+                        </p>
+                        
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-xs opacity-75">
+                            di {nota.utente?.nome} {nota.utente?.cognome}
+                          </span>
+                          
+                          {/* Indicatore email inviata */}
+                          {nota.tipo === 'commento_cliente' && nota.email_inviata && (
+                            <span className="text-xs flex items-center gap-1 text-green-600">
+                              <Mail size={12} />
+                              Email inviata
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* ========== FINE SEZIONE NOTE ========== */}
 
             {/* Tab Interventi */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">

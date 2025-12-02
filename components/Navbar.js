@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
-import NotificationDropdown from '@/components/NotificationDropdown'
+import NotificationDropdownAdvanced from '@/components/NotificationDropdownAdvanced'
 import { 
   Menu, X, Home, Users, HardDrive, Ticket, Bell, 
   User, LogOut, Settings, Sun, Moon, ChevronDown,
@@ -109,8 +109,8 @@ const allNavigation = [...navigation, ...adminNavigation]
               {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
             </button>
 
-            {/* Notifications */}
-            <NotificationDropdown />
+            {/* Notifications - AGGIORNATO CON userProfile */}
+            <NotificationDropdownAdvanced userProfile={userProfile} />
 
             {/* Profile Dropdown - Desktop */}
             <div className="hidden md:block relative">
@@ -129,47 +129,54 @@ const allNavigation = [...navigation, ...adminNavigation]
 
               {/* Dropdown Menu */}
               {profileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2">
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {userProfile?.nome} {userProfile?.cognome}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {user?.email}
-                    </p>
-                    <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
-                      {userProfile?.ruolo}
-                    </span>
+                <>
+                  {/* Overlay per chiudere cliccando fuori */}
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setProfileMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {userProfile?.nome} {userProfile?.cognome}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {user?.email}
+                      </p>
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                        {userProfile?.ruolo}
+                      </span>
+                    </div>
+                    
+                    <Link
+                      href="/profilo"
+                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => setProfileMenuOpen(false)}
+                    >
+                      <User size={16} />
+                      <span>Il Mio Profilo</span>
+                    </Link>
+                    
+                    <Link
+                      href="/impostazioni"
+                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => setProfileMenuOpen(false)}
+                    >
+                      <Settings size={16} />
+                      <span>Impostazioni</span>
+                    </Link>
+                    
+                    <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                    
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      <LogOut size={16} />
+                      <span>Logout</span>
+                    </button>
                   </div>
-                  
-                  <Link
-                    href="/profilo"
-                    className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    onClick={() => setProfileMenuOpen(false)}
-                  >
-                    <User size={16} />
-                    <span>Il Mio Profilo</span>
-                  </Link>
-                  
-                  <Link
-                    href="/impostazioni"
-                    className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    onClick={() => setProfileMenuOpen(false)}
-                  >
-                    <Settings size={16} />
-                    <span>Impostazioni</span>
-                  </Link>
-                  
-                  <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-                  
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  >
-                    <LogOut size={16} />
-                    <span>Logout</span>
-                  </button>
-                </div>
+                </>
               )}
             </div>
 
