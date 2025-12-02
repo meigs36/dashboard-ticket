@@ -1,11 +1,16 @@
 // app/portal/dashboard/page.js
-// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE
+// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE + TICKET CLICCABILI
 //
 // 🔧 MODIFICHE APPLICATE (28 Nov 2025):
 // 1. ✅ KPI Cards cliccabili per navigare tra le sezioni
 // 2. ✅ Rimossa barra tab duplicata - navigazione solo via KPI
 // 3. ✅ NUOVO: Sezione Fatture con download PDF
 // 4. ✅ Fix query ticket e contratti
+//
+// 🔧 MODIFICHE APPLICATE (2 Dic 2025):
+// 5. ✅ Ticket cliccabili nella preview (Ticket Recenti)
+// 6. ✅ Ticket cliccabili nella lista completa (I Miei Ticket)
+// 7. ✅ Link a pagina dettaglio: /portal/ticket/[id]
 
 'use client'
 
@@ -597,10 +602,10 @@ export default function CustomerDashboard() {
                 {tickets.length > 0 ? (
                   <div className="space-y-3">
                     {tickets.slice(0, 3).map((ticket) => (
-                      <div 
+                      <Link 
                         key={ticket.id}
-                        onClick={() => setActiveSection('tickets')}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                        href={`/portal/ticket/${ticket.id}`}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all"
                       >
                         <div className="flex items-center gap-3">
                           <Ticket className={`w-5 h-5 ${
@@ -613,10 +618,13 @@ export default function CustomerDashboard() {
                             <p className="text-xs text-gray-500">{ticket.numero_ticket}</p>
                           </div>
                         </div>
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
-                          {getStatoLabel(ticket.stato)}
-                        </span>
-                      </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
+                            {getStatoLabel(ticket.stato)}
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </div>
+                      </Link>
                     ))}
                   </div>
                 ) : (
@@ -810,9 +818,10 @@ export default function CustomerDashboard() {
               {tickets.length > 0 ? (
                 <div className="space-y-4">
                   {tickets.map((ticket) => (
-                    <div
+                    <Link
                       key={ticket.id}
-                      className="p-5 border border-gray-200 rounded-xl hover:shadow-md transition-shadow"
+                      href={`/portal/ticket/${ticket.id}`}
+                      className="block p-5 border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-300 transition-all group"
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
@@ -823,16 +832,19 @@ export default function CustomerDashboard() {
                             {getStatoLabel(ticket.stato)}
                           </span>
                         </div>
-                        <span className="text-sm text-gray-500">
-                          {new Date(ticket.data_apertura).toLocaleDateString('it-IT', {
-                            day: '2-digit',
-                            month: 'long',
-                            year: 'numeric'
-                          })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500">
+                            {new Date(ticket.data_apertura).toLocaleDateString('it-IT', {
+                              day: '2-digit',
+                              month: 'long',
+                              year: 'numeric'
+                            })}
+                          </span>
+                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                        </div>
                       </div>
 
-                      <h4 className="font-semibold text-gray-900 text-lg mb-2">
+                      <h4 className="font-semibold text-gray-900 text-lg mb-2 group-hover:text-blue-600 transition-colors">
                         {ticket.oggetto}
                       </h4>
 
@@ -860,7 +872,7 @@ export default function CustomerDashboard() {
                           </span>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
