@@ -4,7 +4,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
 import { 
@@ -36,11 +36,20 @@ import toast from 'react-hot-toast'
 
 export default function PortalPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectUrl = searchParams.get('redirect')
   const { signIn, signOut, user, customerProfile, loading: authLoading } = useCustomerAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Redirect se già loggato e c'è un URL di redirect
+  useEffect(() => {
+    if (user && customerProfile && redirectUrl) {
+      router.push(decodeURIComponent(redirectUrl))
+    }
+  }, [user, customerProfile, redirectUrl, router])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -53,6 +62,13 @@ export default function PortalPage() {
       if (loginError) throw loginError
       if (data?.user) {
         toast.success('Login effettuato con successo!')
+        
+        // Redirect all'URL salvato o alla dashboard
+        if (redirectUrl) {
+          router.push(decodeURIComponent(redirectUrl))
+        } else {
+          // Non fare redirect qui, lascia che l'utente veda il menu
+        }
       }
     } catch (error) {
       console.error('Errore login:', error)

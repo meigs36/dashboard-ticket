@@ -1,5 +1,19 @@
 'use client'
 
+/**
+ * NoteTicketForm - Componente per aggiungere note al ticket
+ * 
+ * SISTEMA EMAIL CON RETRY:
+ * - Se il webhook n8n risponde OK → email inviata immediatamente
+ * - Se il webhook fallisce/timeout → email salvata in email_retry_queue
+ * - Un workflow n8n (ogni 30 min) riprova le email in coda
+ * 
+ * Requisiti:
+ * - Tabella email_retry_queue (vedi email_retry_schema.sql)
+ * - Workflow n8n "Retry Email Fallite" attivo
+ * - Variabile env: NEXT_PUBLIC_N8N_WEBHOOK_NOTA_CLIENTE
+ */
+
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { 
@@ -238,45 +252,60 @@ export default function NoteTicketForm({
     }
   }
   
-  // Triggera webhook n8n per invio email
+  // Triggera webhook n8n per invio email (con fallback retry)
   async function triggerEmailWebhook(nota, destinatari) {
+    // Recupera info ticket per il template email
+    const { data: ticketData } = await supabase
+      .from('ticket')
+      .select(`
+        numero_ticket,
+        oggetto,
+        cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)
+      `)
+      .eq('id', ticketId)
+      .single()
+    
+    // Prepara payload
+    const payload = {
+      tipo: 'nota_cliente',
+      nota_id: nota.id,
+      ticket_id: ticketId,
+      numero_ticket: ticketData?.numero_ticket,
+      oggetto_ticket: ticketData?.oggetto,
+      cliente: ticketData?.cliente?.ragione_sociale,
+      contenuto: nota.contenuto,
+      destinatari: destinatari,
+      mittente: {
+        nome: utente.nome,
+        cognome: utente.cognome
+      },
+      timestamp: new Date().toISOString()
+    }
+    
+    const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_NOTA_CLIENTE
+    
+    if (!webhookUrl) {
+      console.warn('⚠️ Webhook URL non configurato per invio email')
+      return
+    }
+    
     try {
-      // Recupera info ticket per il template email
-      const { data: ticketData } = await supabase
-        .from('ticket')
-        .select(`
-          numero_ticket,
-          oggetto,
-          cliente:clienti!ticket_id_cliente_fkey(ragione_sociale)
-        `)
-        .eq('id', ticketId)
-        .single()
+      // Prova il webhook con timeout di 10 secondi
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
       
-      // Chiamata al webhook n8n
-      const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_NOTA_CLIENTE
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      })
       
-      if (webhookUrl) {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tipo: 'nota_cliente',
-            nota_id: nota.id,
-            ticket_id: ticketId,
-            numero_ticket: ticketData?.numero_ticket,
-            oggetto_ticket: ticketData?.oggetto,
-            cliente: ticketData?.cliente?.ragione_sociale,
-            contenuto: nota.contenuto,
-            destinatari: destinatari,
-            mittente: {
-              nome: utente.nome,
-              cognome: utente.cognome
-            },
-            timestamp: new Date().toISOString()
-          })
-        })
-        
-        // Aggiorna flag email inviata
+      clearTimeout(timeoutId)
+      
+      if (response.ok) {
+        // ✅ Webhook ha risposto OK - Aggiorna flag email inviata
+        console.log('✅ Email inviata tramite webhook')
         await supabase
           .from('ticket_note')
           .update({ 
@@ -284,14 +313,26 @@ export default function NoteTicketForm({
             email_inviata_il: new Date().toISOString() 
           })
           .eq('id', nota.id)
-          
       } else {
-        console.warn('⚠️ Webhook URL non configurato per invio email')
+        throw new Error(`Webhook ha risposto con status ${response.status}`)
       }
       
     } catch (err) {
-      console.error('Errore trigger webhook email:', err)
-      // Non bloccare il flusso principale
+      // ❌ Webhook fallito - Salva per retry automatico
+      console.warn('⚠️ Webhook fallito, salvo per retry:', err.message)
+      
+      try {
+        await supabase.from('email_retry_queue').insert({
+          nota_id: nota.id,
+          payload: payload,
+          stato: 'pending',
+          tentativi: 0,
+          prossimo_tentativo: new Date().toISOString()
+        })
+        console.log('📋 Email salvata in coda retry - sarà inviata a breve')
+      } catch (queueError) {
+        console.error('❌ Errore salvataggio in coda retry:', queueError)
+      }
     }
   }
   
@@ -552,7 +593,7 @@ export default function NoteTicketForm({
             <span className="text-sm">
               Nota salvata con successo
               {tipoNota === 'commento_cliente' && inviaEmail && emailSelezionate.length > 0 && 
-                ' - Email in invio'
+                ' - Email in corso di invio'
               }
             </span>
           </div>

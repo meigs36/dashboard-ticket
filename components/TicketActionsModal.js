@@ -599,44 +599,74 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   }
 
   async function triggerEmailWebhook(nota, destinatari) {
-    try {
-      const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_NOTA_CLIENTE
-      
-      if (!webhookUrl) {
-        console.warn('⚠️ Webhook URL non configurato')
-        return
-      }
+    const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_NOTA_CLIENTE
+    
+    if (!webhookUrl) {
+      console.warn('⚠️ Webhook URL non configurato')
+      return
+    }
 
-      await fetch(webhookUrl, {
+    // Prepara payload
+    const payload = {
+      tipo: 'nota_cliente',
+      nota_id: nota.id,
+      ticket_id: ticket.id,
+      numero_ticket: ticket.numero_ticket,
+      oggetto_ticket: ticket.oggetto,
+      cliente: cliente?.ragione_sociale,
+      contenuto: nota.contenuto,
+      destinatari: destinatari,
+      mittente: {
+        nome: userProfile?.nome || 'Team',
+        cognome: userProfile?.cognome || 'OdontoService'
+      },
+      timestamp: new Date().toISOString()
+    }
+
+    try {
+      // Prova il webhook con timeout di 10 secondi
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+      const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo: 'nota_cliente',
-          nota_id: nota.id,
-          ticket_id: ticket.id,
-          numero_ticket: ticket.numero_ticket,
-          oggetto_ticket: ticket.oggetto,
-          cliente: cliente?.ragione_sociale,
-          contenuto: nota.contenuto,
-          destinatari: destinatari,
-          mittente: {
-            nome: userProfile.nome,
-            cognome: userProfile.cognome
-          },
-          timestamp: new Date().toISOString()
-        })
+        body: JSON.stringify(payload),
+        signal: controller.signal
       })
 
-      await supabase
-        .from('ticket_note')
-        .update({ 
-          email_inviata: true, 
-          email_inviata_il: new Date().toISOString() 
-        })
-        .eq('id', nota.id)
+      clearTimeout(timeoutId)
+
+      if (response.ok) {
+        // ✅ Webhook ha risposto OK
+        console.log('✅ Email inviata tramite webhook')
+        await supabase
+          .from('ticket_note')
+          .update({ 
+            email_inviata: true, 
+            email_inviata_il: new Date().toISOString() 
+          })
+          .eq('id', nota.id)
+      } else {
+        throw new Error(`Webhook status ${response.status}`)
+      }
 
     } catch (err) {
-      console.error('Errore webhook email:', err)
+      // ❌ Webhook fallito - Salva per retry automatico (silenzioso)
+      console.warn('⚠️ Webhook fallito, salvo per retry:', err.message)
+      
+      try {
+        await supabase.from('email_retry_queue').insert({
+          nota_id: nota.id,
+          payload: payload,
+          stato: 'pending',
+          tentativi: 0,
+          prossimo_tentativo: new Date().toISOString()
+        })
+        console.log('📋 Email salvata in coda retry - sarà inviata a breve')
+      } catch (queueError) {
+        console.error('❌ Errore salvataggio in coda retry:', queueError)
+      }
     }
   }
 

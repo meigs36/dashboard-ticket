@@ -30,6 +30,15 @@ export default function DettaglioTicketClientePage() {
   const [loadingNote, setLoadingNote] = useState(true)
   const [error, setError] = useState('')
 
+  // Redirect al login se non autenticato
+  useEffect(() => {
+    if (!authLoading && !user) {
+      // Salva l'URL corrente per tornare dopo il login
+      const returnUrl = encodeURIComponent(`/portal/ticket/${params.id}`)
+      router.push(`/portal?redirect=${returnUrl}`)
+    }
+  }, [authLoading, user, params.id, router])
+
   // Carica ticket
   useEffect(() => {
     if (params.id && customerProfile?.cliente_id) {
@@ -181,6 +190,19 @@ export default function DettaglioTicketClientePage() {
     const created = new Date(dataCreazione)
     const diffInHours = (now - created) / (1000 * 60 * 60)
     return diffInHours < 48
+  }
+
+  // Redirect in corso al login
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Accesso richiesto...</p>
+          <p className="text-gray-500 text-sm mt-2">Reindirizzamento al login...</p>
+        </div>
+      </div>
+    )
   }
 
   // Loading state
