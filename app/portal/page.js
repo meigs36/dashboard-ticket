@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
@@ -34,7 +34,23 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Componente wrapper per Suspense
 export default function PortalPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-100">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Caricamento...</p>
+        </div>
+      </div>
+    }>
+      <PortalPageContent />
+    </Suspense>
+  )
+}
+
+function PortalPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectUrl = searchParams.get('redirect')
