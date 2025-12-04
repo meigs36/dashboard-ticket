@@ -1,3 +1,11 @@
+// components/CustomerOnboardingWizard.js
+// Wizard Onboarding Cliente - Form multi-step
+//
+// 🔧 MODIFICHE APPLICATE (4 Dic 2025):
+// 1. ✅ TIPI_MACCHINARIO aggiornati con categorie reali dal database
+// 2. ✅ Raggruppamento per categoria (Radiologia, Sterilizzazione, ecc.)
+// 3. ✅ Aggiunta nuove tipologie: Piezosurgery, Laser, Termodisinfettore, ecc.
+
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
@@ -233,18 +241,72 @@ export default function CustomerOnboardingWizard({
   ]
 
   const TIPI_MACCHINARIO = [
-    'Riunito Odontoiatrico',
-    'Autoclave',
-    'RX Endorale',
-    'Panoramica',
+    // Apparecchiature principali studio
+    'Riunito',
+    'Poltrona',
+    
+    // Radiologia
+    'Radiologico',
+    'Panoramico',
+    'RVG',
     'TAC Cone Beam',
-    'Ablatore Ultrasuoni',
+    
+    // Sterilizzazione
+    'Autoclave',
+    'Sterilizzatrice',
+    'Termodisinfettore',
+    
+    // Aria e Aspirazione
     'Compressore',
-    'Aspiratore',
-    'Lampada Polimerizzazione',
+    'Aspirazione',
+    'Aspiratore Chirurgico',
+    
+    // Strumentario rotante
     'Micromotore',
+    'Manipolo',
     'Turbina',
+    'Contrangolo',
+    
+    // Endodonzia e Implantologia
+    'Motore Endodontico',
+    'Motore Impianti',
+    'Localizzatore Apicale',
+    
+    // Igiene e Profilassi
+    'Ablatore Ultrasuoni',
+    'Lampada Sbiancante',
+    
+    // Lampade e Polimerizzazione
+    'Lampada Fotopolimerizzatrice',
+    'Lampada Scialittica',
+    
+    // Imaging e Scanner
     'Scanner Intraorale',
+    'Telecamera Intraorale',
+    
+    // Laboratorio
+    'Micromotore Laboratorio',
+    'Forno Ceramica',
+    'Fonditrice',
+    
+    // Accessori e Manutenzione
+    'Sigillatrice',
+    'Lubrificatore Manipoli',
+    'Miscelatore',
+    'Distillatore',
+    'Deionizzatore',
+    
+    // Software e Hardware
+    'Software',
+    'Hardware',
+    'Computer',
+    
+    // Chirurgia
+    'Laser',
+    'Elettrobisturi',
+    'Piezosurgery',
+    
+    // Altro
     'Altro'
   ]
 
