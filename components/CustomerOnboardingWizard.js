@@ -5,6 +5,7 @@
 // 1. ✅ TIPI_MACCHINARIO aggiornati con categorie reali dal database
 // 2. ✅ Raggruppamento per categoria (Radiologia, Sterilizzazione, ecc.)
 // 3. ✅ Aggiunta nuove tipologie: Piezosurgery, Laser, Termodisinfettore, ecc.
+// 4. ✅ FIX: Tipi esistenti dal DB non in lista ora mostrati nel dropdown
 
 'use client'
 
@@ -1231,6 +1232,12 @@ export default function CustomerOnboardingWizard({
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                         >
                           <option value="">Seleziona...</option>
+                          {/* Se il tipo esistente non è nella lista, mostralo come prima opzione */}
+                          {macc.tipo && !TIPI_MACCHINARIO.includes(macc.tipo) && (
+                            <option key={macc.tipo} value={macc.tipo}>
+                              {macc.tipo} (esistente)
+                            </option>
+                          )}
                           {TIPI_MACCHINARIO.map(tipo => (
                             <option key={tipo} value={tipo}>{tipo}</option>
                           ))}
