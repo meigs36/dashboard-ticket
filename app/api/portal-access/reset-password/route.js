@@ -1,14 +1,22 @@
+// app/api/portal-access/reset-password/route.js
+// 
+// 🔧 FIX (4 Dic 2025): Spostato createClient dentro la funzione POST
+// per evitare errore "supabaseKey is required" durante build Vercel
+
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-// Client admin con service_role key
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+// ✅ NON inizializzare qui - le env vars non sono disponibili durante la build
+// const supabaseAdmin = createClient(...)
 
 export async function POST(request) {
   try {
+    // ✅ Crea client DENTRO la funzione
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+
     const body = await request.json()
     const { userId, newPassword } = body
 
