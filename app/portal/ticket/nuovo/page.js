@@ -5,17 +5,19 @@
 // 1. ✅ Lettura parametro ?macchinario=xxx dalla URL
 // 2. ✅ Preselezione automatica del macchinario nel dropdown
 // 3. ✅ Banner informativo quando macchinario è preselezionato
+// 4. ✅ Suspense boundary per useSearchParams (Next.js 14+)
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
 import { ArrowLeft, Send, Wrench, AlertCircle, CheckCircle, Info } from 'lucide-react'
 import Link from 'next/link'
 
-export default function NuovoTicketClientePage() {
+// ✅ Componente interno che usa useSearchParams
+function NuovoTicketForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, customerProfile, loading: authLoading } = useCustomerAuth()
@@ -389,5 +391,26 @@ export default function NuovoTicketClientePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ✅ Loading fallback per Suspense
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Caricamento...</p>
+      </div>
+    </div>
+  )
+}
+
+// ✅ Export con Suspense boundary (richiesto da Next.js 14+ per useSearchParams)
+export default function NuovoTicketClientePage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <NuovoTicketForm />
+    </Suspense>
   )
 }
