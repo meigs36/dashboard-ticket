@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { 
   AlertCircle, Users, User, HardDrive, Ticket, TrendingUp, 
-  Zap, Plus, BarChart3, ArrowRight 
+  Zap, Plus, BarChart3, ArrowRight, ShieldCheck 
 } from 'lucide-react'
 import Link from 'next/link'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
@@ -16,6 +16,7 @@ export default function DashboardAdmin() {
     totalMacchinari: 0,
     clientiAttivi: 0,
     ticketAperti: 0,
+    accessiPortale: 0,
     loading: true
   })
 
@@ -50,11 +51,25 @@ export default function DashboardAdmin() {
         .select('*', { count: 'exact', head: true })
         .in('stato', ['aperto', 'assegnato', 'in_lavorazione'])
 
+      // 🆕 Conta accessi portale attivi
+      let accessiPortaleCount = 0
+      try {
+        const { count } = await supabase
+          .from('customer_portal_users')
+          .select('*', { count: 'exact', head: true })
+          .eq('attivo', true)
+        accessiPortaleCount = count || 0
+      } catch (e) {
+        // Tabella potrebbe non esistere ancora
+        console.log('Tabella customer_portal_users non disponibile')
+      }
+
       setStats({
         totalClienti: clientiCount || 0,
         totalMacchinari: macchinariCount || 0,
         clientiAttivi: clientiAttiviCount || 0,
         ticketAperti: ticketApertiCount || 0,
+        accessiPortale: accessiPortaleCount,
         loading: false
       })
     } catch (error) {
@@ -185,8 +200,8 @@ export default function DashboardAdmin() {
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* KPI Cards - 🆕 Aggiunta card Accessi Portale */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <Link href="/clienti">
             <div className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 border border-gray-200/50 dark:border-gray-700/50 hover:scale-105 cursor-pointer">
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 dark:from-blue-400/20 dark:to-purple-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -244,6 +259,26 @@ export default function DashboardAdmin() {
             </div>
           </Link>
 
+          {/* 🆕 NUOVA CARD: Accessi Portale */}
+          <Link href="/admin/portal-access">
+            <div className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 border border-gray-200/50 dark:border-gray-700/50 hover:scale-105 cursor-pointer">
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-violet-500/10 dark:from-indigo-400/20 dark:to-violet-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-3 rounded-xl shadow-lg">
+                    <ShieldCheck className="text-white" size={24} />
+                  </div>
+                  <span className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 bg-clip-text text-transparent">
+                    {stats.accessiPortale}
+                  </span>
+                </div>
+                <h3 className="text-gray-900 dark:text-white text-lg font-semibold mb-1">Accessi Portale</h3>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">Clienti attivi</p>
+              </div>
+            </div>
+          </Link>
+
           <Link href="/analytics">
             <div className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 border border-gray-200/50 dark:border-gray-700/50 hover:scale-105 cursor-pointer">
               <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 dark:from-purple-400/20 dark:to-pink-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -277,7 +312,7 @@ export default function DashboardAdmin() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Quick Actions */}
+          {/* Quick Actions - 🆕 Aggiunto link Gestione Accessi */}
           <div className="lg:col-span-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Azioni Rapide</h2>
             <div className="space-y-3">
@@ -309,6 +344,17 @@ export default function DashboardAdmin() {
                   <HardDrive size={18} className="text-white" />
                 </div>
                 <span className="font-medium text-gray-900 dark:text-white">Gestisci Macchinari</span>
+              </Link>
+
+              {/* 🆕 NUOVO LINK: Gestione Accessi Portale */}
+              <Link
+                href="/admin/portal-access"
+                className="group flex items-center gap-3 p-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all"
+              >
+                <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-2 rounded-lg">
+                  <ShieldCheck size={18} className="text-white" />
+                </div>
+                <span className="font-medium text-gray-900 dark:text-white">Accessi Portale</span>
               </Link>
             </div>
           </div>

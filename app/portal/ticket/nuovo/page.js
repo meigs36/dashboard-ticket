@@ -1,21 +1,36 @@
+// app/portal/ticket/nuovo/page.js
+// Pagina creazione nuovo ticket dal portale clienti
+//
+// 🔧 MODIFICHE APPLICATE (4 Dic 2025):
+// 1. ✅ Lettura parametro ?macchinario=xxx dalla URL
+// 2. ✅ Preselezione automatica del macchinario nel dropdown
+// 3. ✅ Banner informativo quando macchinario è preselezionato
+
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
-import { ArrowLeft, Send, Wrench, AlertCircle, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Send, Wrench, AlertCircle, CheckCircle, Info } from 'lucide-react'
 import Link from 'next/link'
 
 export default function NuovoTicketClientePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, customerProfile, loading: authLoading } = useCustomerAuth()
+  
+  // ✅ Leggi parametro macchinario dalla URL
+  const macchinarioIdFromUrl = searchParams.get('macchinario')
   
   const [loading, setLoading] = useState(false)
   const [loadingMacchinari, setLoadingMacchinari] = useState(true)
   const [macchinari, setMacchinari] = useState([])
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  
+  // ✅ Info macchinario preselezionato
+  const [macchinarioPreselezionato, setMacchinarioPreselezionato] = useState(null)
   
   const [formData, setFormData] = useState({
     id_macchinario: '',
@@ -40,6 +55,19 @@ export default function NuovoTicketClientePage() {
         
         if (error) throw error
         setMacchinari(data || [])
+        
+        // ✅ Se c'è un macchinario nella URL, preselezionalo
+        if (macchinarioIdFromUrl && data) {
+          const macchinarioTrovato = data.find(m => m.id === macchinarioIdFromUrl)
+          if (macchinarioTrovato) {
+            setFormData(prev => ({
+              ...prev,
+              id_macchinario: macchinarioIdFromUrl
+            }))
+            setMacchinarioPreselezionato(macchinarioTrovato)
+            console.log('✅ Macchinario preselezionato:', macchinarioTrovato)
+          }
+        }
       } catch (err) {
         console.error('Errore caricamento macchinari:', err)
       } finally {
@@ -48,7 +76,7 @@ export default function NuovoTicketClientePage() {
     }
     
     fetchMacchinari()
-  }, [customerProfile?.cliente_id])
+  }, [customerProfile?.cliente_id, macchinarioIdFromUrl])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -56,6 +84,17 @@ export default function NuovoTicketClientePage() {
       ...prev,
       [name]: value
     }))
+    
+    // ✅ Se cambia il macchinario manualmente, aggiorna l'info
+    if (name === 'id_macchinario') {
+      if (value) {
+        const macchinarioSelezionato = macchinari.find(m => m.id === value)
+        setMacchinarioPreselezionato(macchinarioSelezionato || null)
+      } else {
+        setMacchinarioPreselezionato(null)
+      }
+    }
+    
     // Reset errore quando l'utente modifica
     if (error) setError('')
   }
@@ -86,7 +125,7 @@ export default function NuovoTicketClientePage() {
           categoria: formData.categoria,
           oggetto: formData.oggetto.trim(),
           descrizione: formData.descrizione.trim(),
-          priorita: 'media', // Default, sarà gestita dall'admin
+          priorita: 'media',
           canale_origine: 'portale_cliente',
           stato: 'aperto'
         }])
@@ -169,6 +208,26 @@ export default function NuovoTicketClientePage() {
           </p>
         </div>
 
+        {/* ✅ Banner macchinario preselezionato */}
+        {macchinarioPreselezionato && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <div className="p-2 bg-amber-100 rounded-lg">
+              <Wrench className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-amber-800">
+                Ticket per macchinario specifico
+              </h3>
+              <p className="text-amber-700 text-sm mt-1">
+                <strong>{macchinarioPreselezionato.tipo_macchinario}</strong>
+                {macchinarioPreselezionato.marca && ` - ${macchinarioPreselezionato.marca}`}
+                {macchinarioPreselezionato.modello && ` ${macchinarioPreselezionato.modello}`}
+                <span className="text-amber-600"> (Matr: {macchinarioPreselezionato.numero_seriale})</span>
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
           
@@ -204,12 +263,14 @@ export default function NuovoTicketClientePage() {
                 name="id_macchinario"
                 value={formData.id_macchinario}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white ${
+                  formData.id_macchinario ? 'border-amber-300 bg-amber-50' : 'border-gray-300'
+                }`}
               >
                 <option value="">Seleziona macchinario (opzionale)</option>
                 {macchinari.map(mac => (
                   <option key={mac.id} value={mac.id}>
-                    {mac.tipo_macchinario} - {mac.marca} {mac.modello} ({mac.numero_seriale})
+                    {mac.tipo_macchinario} - {mac.marca && `${mac.marca} `}{mac.modello} ({mac.numero_seriale})
                   </option>
                 ))}
               </select>

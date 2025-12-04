@@ -1,5 +1,5 @@
 // app/portal/dashboard/page.js
-// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE + TICKET CLICCABILI
+// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE + TICKET CLICCABILI + MACCHINARI INSTALLATI
 //
 // 🔧 MODIFICHE APPLICATE (28 Nov 2025):
 // 1. ✅ KPI Cards cliccabili per navigare tra le sezioni
@@ -11,6 +11,13 @@
 // 5. ✅ Ticket cliccabili nella preview (Ticket Recenti)
 // 6. ✅ Ticket cliccabili nella lista completa (I Miei Ticket)
 // 7. ✅ Link a pagina dettaglio: /portal/ticket/[id]
+//
+// 🔧 MODIFICHE APPLICATE (4 Dic 2025):
+// 8. ✅ Query macchinari dalla tabella "macchinari" (non customer_macchinari)
+// 9. ✅ Nuova sezione Macchinari Installati con tabella compatta
+// 10. ✅ Badge numerico ticket aperti per ogni macchinario
+// 11. ✅ Modal per consultare ticket del macchinario specifico
+// 12. ✅ Indicatore scadenza manutenzione con alert visivo
 
 'use client'
 
@@ -25,7 +32,7 @@ import {
   Mail, Phone, MapPin, CheckCircle2, AlertCircle,
   Download, Eye, Edit, Plus, Clock, Shield, Ticket,
   ChevronRight, ArrowLeft, Receipt, Euro, Calendar,
-  CreditCard, FileCheck, X
+  CreditCard, FileCheck, X, AlertTriangle, Settings
 } from 'lucide-react'
 
 export default function CustomerDashboard() {
@@ -38,14 +45,21 @@ export default function CustomerDashboard() {
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [pdfViewerUrl, setPdfViewerUrl] = useState(null)
   const [pdfViewerTitle, setPdfViewerTitle] = useState('')
+  
+  // ✅ NUOVO: Stati per modal ticket macchinario
+  const [ticketModalOpen, setTicketModalOpen] = useState(false)
+  const [selectedMacchinario, setSelectedMacchinario] = useState(null)
+  const [macchinarioTickets, setMacchinarioTickets] = useState([])
+  
   const [dashboardData, setDashboardData] = useState({
     cliente: customerProfile || null,
     referenti: [],
-    macchinari: [],
+    macchinari: [],        // ✅ Ora usa tabella "macchinari"
+    macchinariInstallati: [], // ✅ NUOVO: macchinari con conteggio ticket
     documenti: [],
     contratti: [],
     tickets: [],
-    fatture: []  // ✅ NUOVO
+    fatture: []
   })
 
   // Protezione route
@@ -83,13 +97,83 @@ export default function CustomerDashboard() {
         .eq('attivo', true)
         .order('principale', { ascending: false })
 
-      // Carica macchinari
-      const { data: macchinariData } = await supabase
-        .from('customer_macchinari')
-        .select('*')
-        .eq('cliente_id', clienteId)
-        .eq('attivo', true)
-        .order('created_at', { ascending: false })
+      // ✅ MODIFICATO: Carica macchinari dalla tabella "macchinari" (non customer_macchinari)
+      const { data: macchinariData, error: macchinariError } = await supabase
+        .from('macchinari')
+        .select(`
+          id,
+          numero_seriale,
+          numero_libro,
+          tipo_macchinario,
+          marca,
+          modello,
+          data_installazione,
+          garanzia_scadenza,
+          garanzia_estensione_scadenza,
+          contratto_manutenzione,
+          stato,
+          ubicazione_specifica,
+          note_tecniche,
+          data_ultimo_intervento
+        `)
+        .eq('id_cliente', clienteId)
+        .neq('stato', 'dismesso')
+        .order('marca', { ascending: true })
+
+      if (macchinariError) {
+        console.error('❌ Errore caricamento macchinari:', macchinariError)
+      } else {
+        console.log('✅ Macchinari installati caricati:', macchinariData?.length || 0)
+      }
+
+      // ✅ NUOVO: Carica tickets e raggruppa per macchinario
+      const { data: ticketsData, error: ticketsError } = await supabase
+        .from('ticket')
+        .select(`
+          id,
+          numero_ticket,
+          oggetto,
+          descrizione,
+          stato,
+          priorita,
+          categoria,
+          canale_origine,
+          data_apertura,
+          data_chiusura,
+          id_macchinario
+        `)
+        .eq('id_cliente', clienteId)
+        .order('data_apertura', { ascending: false })
+        .limit(50)
+
+      if (ticketsError) {
+        console.error('❌ Errore caricamento ticket:', ticketsError)
+      }
+
+      // ✅ NUOVO: Calcola conteggio ticket aperti per ogni macchinario
+      const ticketApertiPerMacchinario = {}
+      const ticketTotaliPerMacchinario = {}
+      
+      ;(ticketsData || []).forEach(ticket => {
+        if (ticket.id_macchinario) {
+          // Conta totali
+          ticketTotaliPerMacchinario[ticket.id_macchinario] = 
+            (ticketTotaliPerMacchinario[ticket.id_macchinario] || 0) + 1
+          
+          // Conta solo aperti (non chiusi/risolti/annullati)
+          if (!['chiuso', 'risolto', 'annullato'].includes(ticket.stato)) {
+            ticketApertiPerMacchinario[ticket.id_macchinario] = 
+              (ticketApertiPerMacchinario[ticket.id_macchinario] || 0) + 1
+          }
+        }
+      })
+
+      // ✅ NUOVO: Arricchisci macchinari con conteggio ticket
+      const macchinariConTickets = (macchinariData || []).map(macch => ({
+        ...macch,
+        ticketAperti: ticketApertiPerMacchinario[macch.id] || 0,
+        ticketTotali: ticketTotaliPerMacchinario[macch.id] || 0
+      }))
 
       // Carica documenti
       const { data: documentiData } = await supabase
@@ -108,26 +192,7 @@ export default function CustomerDashboard() {
         .order('data_contratto', { ascending: false })
         .limit(5)
 
-      // Carica tickets
-      const { data: ticketsData } = await supabase
-        .from('ticket')
-        .select(`
-          id,
-          numero_ticket,
-          oggetto,
-          descrizione,
-          stato,
-          priorita,
-          categoria,
-          canale_origine,
-          data_apertura,
-          data_chiusura
-        `)
-        .eq('id_cliente', clienteId)
-        .order('data_apertura', { ascending: false })
-        .limit(20)
-
-      // ✅ NUOVO: Carica fatture
+      // ✅ Carica fatture
       const { data: fattureData, error: fattureError } = await supabase
         .from('fatture')
         .select('*')
@@ -144,7 +209,8 @@ export default function CustomerDashboard() {
       setDashboardData({
         cliente: customerProfile,
         referenti: referentiData || [],
-        macchinari: macchinariData || [],
+        macchinari: macchinariConTickets,           // ✅ Macchinari con conteggio ticket
+        macchinariInstallati: macchinariConTickets, // ✅ Alias per retrocompatibilità
         documenti: documentiData || [],
         contratti: contrattiData || [],
         tickets: ticketsData || [],
@@ -159,6 +225,51 @@ export default function CustomerDashboard() {
     }
   }
 
+  // ✅ NUOVO: Funzione per aprire modal ticket di un macchinario
+  const openTicketModal = (macchinario) => {
+    const { tickets } = dashboardData
+    const ticketsMacchinario = tickets.filter(t => t.id_macchinario === macchinario.id)
+    setSelectedMacchinario(macchinario)
+    setMacchinarioTickets(ticketsMacchinario)
+    setTicketModalOpen(true)
+  }
+
+  // ✅ NUOVO: Helper per verificare scadenza manutenzione
+  const getScadenzaManutenzione = (macchinario) => {
+    // Usa garanzia_scadenza come data riferimento per manutenzione
+    // Puoi modificare questo campo se hai un campo dedicato
+    const dataScadenza = macchinario.garanzia_scadenza || macchinario.garanzia_estensione_scadenza
+    
+    if (!dataScadenza) return { status: 'unknown', label: 'N/D', className: 'text-gray-400' }
+    
+    const oggi = new Date()
+    const scadenza = new Date(dataScadenza)
+    const giorniRimanenti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24))
+    
+    if (giorniRimanenti < 0) {
+      return { 
+        status: 'expired', 
+        label: 'Scaduta', 
+        className: 'text-red-600 bg-red-50',
+        icon: AlertTriangle
+      }
+    } else if (giorniRimanenti <= 30) {
+      return { 
+        status: 'warning', 
+        label: `${giorniRimanenti}gg`, 
+        className: 'text-amber-600 bg-amber-50',
+        icon: AlertCircle
+      }
+    } else {
+      return { 
+        status: 'ok', 
+        label: new Date(dataScadenza).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }), 
+        className: 'text-green-600',
+        icon: CheckCircle2
+      }
+    }
+  }
+
   const handleLogout = async () => {
     await signOut()
     router.push('/portal')
@@ -167,16 +278,14 @@ export default function CustomerDashboard() {
   // Helper per visualizzare fattura PDF in modal
   const downloadFattura = async (fattura) => {
     try {
-      // Usa storage_path dalla fattura, o costruisci il path
       const pdfPath = fattura.storage_path || `fatture/${fattura.anno || new Date().getFullYear()}/fattura_${fattura.numero_fattura.replace('/', '-')}.pdf`
       const bucket = fattura.storage_bucket || 'fatture-documenti'
       
       console.log('📄 Download fattura:', { bucket, pdfPath, fattura })
       
-      // Per bucket privati usa createSignedUrl
       const { data: signedData, error: signedError } = await supabase.storage
         .from(bucket)
-        .createSignedUrl(pdfPath, 300) // URL valido per 5 minuti
+        .createSignedUrl(pdfPath, 300)
       
       console.log('📄 Signed URL response:', { signedData, signedError })
       
@@ -410,6 +519,12 @@ export default function CustomerDashboard() {
               <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
                 <Wrench className="w-5 h-5 text-amber-600" />
               </div>
+              {/* ✅ Badge per macchinari con ticket aperti */}
+              {macchinari.filter(m => m.ticketAperti > 0).length > 0 && (
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                  {macchinari.filter(m => m.ticketAperti > 0).length}
+                </span>
+              )}
             </div>
             <h3 className="text-xs font-medium text-gray-600 mb-1">Macchinari</h3>
             <p className="text-xl font-bold text-gray-900">{macchinari.length}</p>
@@ -452,7 +567,7 @@ export default function CustomerDashboard() {
             <p className="text-xl font-bold text-gray-900">{tickets.length}</p>
           </button>
 
-          {/* ✅ NUOVO: Card 6: Fatture */}
+          {/* Card 6: Fatture */}
           <button
             onClick={() => setActiveSection('fatture')}
             className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-emerald-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
@@ -598,196 +713,95 @@ export default function CustomerDashboard() {
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
-                
                 {tickets.length > 0 ? (
                   <div className="space-y-3">
                     {tickets.slice(0, 3).map((ticket) => (
                       <Link 
-                        key={ticket.id}
+                        key={ticket.id} 
                         href={`/portal/ticket/${ticket.id}`}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all"
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                       >
-                        <div className="flex items-center gap-3">
-                          <Ticket className={`w-5 h-5 ${
-                            ticket.stato === 'aperto' ? 'text-blue-600' :
-                            ticket.stato === 'in_lavorazione' ? 'text-amber-600' :
-                            ticket.stato === 'risolto' ? 'text-green-600' : 'text-gray-600'
-                          }`} />
-                          <div>
-                            <p className="font-medium text-gray-900 text-sm">{ticket.oggetto}</p>
-                            <p className="text-xs text-gray-500">{ticket.numero_ticket}</p>
-                          </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {ticket.oggetto}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            #{ticket.numero_ticket} • {new Date(ticket.data_apertura).toLocaleDateString('it-IT')}
+                          </p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
-                            {getStatoLabel(ticket.stato)}
-                          </span>
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
-                        </div>
+                        <span className={`
+                          ml-3 px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap
+                          ${getStatoBadge(ticket.stato)}
+                        `}>
+                          {getStatoLabel(ticket.stato)}
+                        </span>
                       </Link>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-6">
-                    <Ticket className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <div className="text-center py-8">
+                    <Ticket className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-500 text-sm">Nessun ticket</p>
                   </div>
                 )}
               </div>
 
-              {/* ✅ NUOVO: Fatture Recenti - Anteprima */}
+              {/* ✅ NUOVO: Preview Macchinari nell'Overview */}
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    Fatture Recenti
+                    Macchinari Installati
                   </h3>
                   <button
-                    onClick={() => setActiveSection('fatture')}
+                    onClick={() => setActiveSection('macchinari')}
                     className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
                   >
-                    Vedi tutte
+                    Vedi tutti
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
-                
-                {fatture.length > 0 ? (
+                {macchinari.length > 0 ? (
                   <div className="space-y-3">
-                    {fatture.slice(0, 3).map((fattura) => (
-                      <div 
-                        key={fattura.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Receipt className="w-5 h-5 text-emerald-600" />
-                          <div>
-                            <p className="font-medium text-gray-900 text-sm">{fattura.numero_fattura}</p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(fattura.data_emissione).toLocaleDateString('it-IT')}
-                            </p>
+                    {macchinari.slice(0, 3).map((macch) => {
+                      const scadenza = getScadenzaManutenzione(macch)
+                      return (
+                        <div 
+                          key={macch.id} 
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                              <Wrench className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {macch.tipo_macchinario || 'N/D'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {macch.marca && `${macch.marca} `}{macch.modello || ''} • SN: {macch.numero_seriale || 'N/D'}
+                              </p>
+                            </div>
                           </div>
+                          {/* Badge ticket */}
+                          {macch.ticketAperti > 0 && (
+                            <button
+                              onClick={() => openTicketModal(macch)}
+                              className="px-2.5 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full hover:bg-red-200 transition-colors"
+                            >
+                              {macch.ticketAperti} ticket
+                            </button>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-gray-900">€ {fattura.totale?.toFixed(2)}</p>
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoFatturaBadge(fattura.stato)}`}>
-                            {getStatoFatturaLabel(fattura.stato)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
-                  <div className="text-center py-6">
-                    <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p className="text-gray-500 text-sm">Nessuna fattura</p>
+                  <div className="text-center py-8">
+                    <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Nessun macchinario registrato</p>
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* ✅ NUOVO: FATTURE SECTION */}
-          {activeSection === 'fatture' && (
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setActiveSection('overview')}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <ArrowLeft className="w-5 h-5 text-gray-600" />
-                  </button>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Le Mie Fatture
-                  </h3>
-                </div>
-              </div>
-
-              {fatture.length > 0 ? (
-                <div className="space-y-4">
-                  {fatture.map((fattura) => (
-                    <div
-                      key={fattura.id}
-                      className="p-5 border border-gray-200 rounded-xl hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Receipt className="w-6 h-6 text-emerald-600" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-semibold text-gray-900">
-                                {fattura.numero_fattura}
-                              </h4>
-                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoFatturaBadge(fattura.stato)}`}>
-                                {getStatoFatturaLabel(fattura.stato)}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                Emessa: {new Date(fattura.data_emissione).toLocaleDateString('it-IT')}
-                              </span>
-                              {fattura.data_scadenza && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-4 h-4" />
-                                  Scadenza: {new Date(fattura.data_scadenza).toLocaleDateString('it-IT')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="text-sm text-gray-500">Totale</p>
-                            <p className="text-xl font-bold text-gray-900">
-                              € {fattura.totale?.toFixed(2)}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => downloadFattura(fattura)}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                          >
-                            <Download className="w-4 h-4" />
-                            <span className="hidden sm:inline">PDF</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Dettagli fattura */}
-                      <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-500">Imponibile</p>
-                          <p className="font-medium text-gray-900">€ {fattura.imponibile?.toFixed(2)}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">IVA ({fattura.iva_percentuale || 22}%)</p>
-                          <p className="font-medium text-gray-900">€ {fattura.iva_importo?.toFixed(2)}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Ore lavorate</p>
-                          <p className="font-medium text-gray-900">{fattura.ore_totali || '-'}h</p>
-                        </div>
-                        {fattura.stato === 'pagata' && fattura.data_pagamento && (
-                          <div>
-                            <p className="text-gray-500">Pagata il</p>
-                            <p className="font-medium text-green-600">
-                              {new Date(fattura.data_pagamento).toLocaleDateString('it-IT')}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 mb-2">Nessuna fattura disponibile</p>
-                  <p className="text-sm text-gray-400">Le fatture appariranno qui dopo gli interventi</p>
-                </div>
-              )}
             </div>
           )}
 
@@ -814,77 +828,52 @@ export default function CustomerDashboard() {
                   Nuovo Ticket
                 </Link>
               </div>
-
               {tickets.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {tickets.map((ticket) => (
-                    <Link
+                    <Link 
                       key={ticket.id}
                       href={`/portal/ticket/${ticket.id}`}
-                      className="block p-5 border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-300 transition-all group"
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                            {ticket.numero_ticket}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-sm font-mono text-gray-500">
+                            #{ticket.numero_ticket}
                           </span>
-                          <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatoBadge(ticket.stato)}`}>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
                             {getStatoLabel(ticket.stato)}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-500">
-                            {new Date(ticket.data_apertura).toLocaleDateString('it-IT', {
-                              day: '2-digit',
-                              month: 'long',
-                              year: 'numeric'
-                            })}
-                          </span>
-                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                        </div>
-                      </div>
-
-                      <h4 className="font-semibold text-gray-900 text-lg mb-2 group-hover:text-blue-600 transition-colors">
-                        {ticket.oggetto}
-                      </h4>
-
-                      {ticket.descrizione && (
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                        <h4 className="font-medium text-gray-900 mb-1">
+                          {ticket.oggetto}
+                        </h4>
+                        <p className="text-sm text-gray-600 line-clamp-2">
                           {ticket.descrizione}
                         </p>
-                      )}
-
-                      <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
-                        {ticket.categoria && (
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                            {ticket.categoria.replace(/_/g, ' ')}
+                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(ticket.data_apertura).toLocaleDateString('it-IT')}
                           </span>
-                        )}
-                        {ticket.priorita && (
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            ticket.priorita === 'alta' || ticket.priorita === 'critica'
-                              ? 'bg-red-100 text-red-700'
-                              : ticket.priorita === 'media'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            Priorità: {ticket.priorita}
-                          </span>
-                        )}
+                          {ticket.categoria && (
+                            <span className="capitalize">{ticket.categoria.replace('_', ' ')}</span>
+                          )}
+                        </div>
                       </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 ml-4" />
                     </Link>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-12">
                   <Ticket className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 mb-4">Non hai ancora aperto nessun ticket</p>
+                  <p className="text-gray-500 mb-4">Nessun ticket presente</p>
                   <Link
                     href="/portal/ticket/nuovo"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
-                    <Plus className="w-5 h-5" />
-                    Apri il tuo primo ticket
+                    Apri il primo ticket
                   </Link>
                 </div>
               )}
@@ -912,36 +901,44 @@ export default function CustomerDashboard() {
                 </button>
               </div>
               {referenti.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {referenti.map((referente) => (
-                    <div key={referente.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                          <Users className="w-5 h-5 text-green-600" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {referenti.map((ref) => (
+                    <div key={ref.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-green-600 font-bold text-lg">
+                              {ref.nome?.charAt(0)}{ref.cognome?.charAt(0)}
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">
+                              {ref.nome} {ref.cognome}
+                            </h4>
+                            <p className="text-sm text-gray-600">{ref.ruolo}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900">
-                            {referente.nome} {referente.cognome}
-                          </h4>
-                          <p className="text-sm text-gray-600">{referente.ruolo}</p>
-                        </div>
-                        {referente.principale && (
-                          <span className="ml-auto px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                        {ref.principale && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
                             Principale
                           </span>
                         )}
                       </div>
                       <div className="space-y-2 text-sm">
-                        {referente.telefono && (
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <Phone className="w-4 h-4" />
-                            <span>{referente.telefono}</span>
-                          </div>
-                        )}
-                        {referente.email && (
+                        {ref.email && (
                           <div className="flex items-center gap-2 text-gray-600">
                             <Mail className="w-4 h-4" />
-                            <span>{referente.email}</span>
+                            <a href={`mailto:${ref.email}`} className="hover:text-blue-600">
+                              {ref.email}
+                            </a>
+                          </div>
+                        )}
+                        {ref.telefono && (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Phone className="w-4 h-4" />
+                            <a href={`tel:${ref.telefono}`} className="hover:text-blue-600">
+                              {ref.telefono}
+                            </a>
                           </div>
                         )}
                       </div>
@@ -951,7 +948,7 @@ export default function CustomerDashboard() {
               ) : (
                 <div className="text-center py-12">
                   <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 mb-4">Nessun referente configurato</p>
+                  <p className="text-gray-500 mb-4">Nessun referente registrato</p>
                   <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     Aggiungi il primo referente
                   </button>
@@ -960,7 +957,7 @@ export default function CustomerDashboard() {
             </div>
           )}
 
-          {/* MACCHINARI SECTION */}
+          {/* ✅ MACCHINARI SECTION - Versione Tabellare Completa */}
           {activeSection === 'macchinari' && (
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
@@ -971,60 +968,256 @@ export default function CustomerDashboard() {
                   >
                     <ArrowLeft className="w-5 h-5 text-gray-600" />
                   </button>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Macchinari e Attrezzature
-                  </h3>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Macchinari Installati
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {macchinari.length} macchinari registrati
+                    </p>
+                  </div>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  <Plus className="w-4 h-4" />
-                  Aggiungi Macchinario
-                </button>
               </div>
+
               {macchinari.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {macchinari.map((macch) => (
-                    <div key={macch.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
-                            <Wrench className="w-6 h-6 text-amber-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              {macch.tipo_macchinario}
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              {macch.marca} {macch.modello}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        {macch.numero_seriale && (
-                          <div>
-                            <p className="text-gray-500">Seriale</p>
-                            <p className="font-medium text-gray-900">{macch.numero_seriale}</p>
-                          </div>
-                        )}
-                        {macch.data_installazione && (
-                          <div>
-                            <p className="text-gray-500">Installazione</p>
-                            <p className="font-medium text-gray-900">
-                              {new Date(macch.data_installazione).toLocaleDateString('it-IT')}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Tipo Apparecchiatura
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Matricola
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Installazione
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Scad. Manutenzione
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Ticket
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Azioni
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {macchinari.map((macch) => {
+                        const scadenza = getScadenzaManutenzione(macch)
+                        const ScadenzaIcon = scadenza.icon
+                        
+                        return (
+                          <tr 
+                            key={macch.id} 
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+                            {/* Tipo Apparecchiatura */}
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                  <Wrench className="w-5 h-5 text-amber-600" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">
+                                    {macch.tipo_macchinario || 'N/D'}
+                                  </p>
+                                  <p className="text-sm text-gray-500">
+                                    {macch.marca && `${macch.marca} `}{macch.modello || ''}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            
+                            {/* Matricola (ex Seriale) */}
+                            <td className="py-4 px-4">
+                              <span className="font-mono text-sm text-gray-700">
+                                {macch.numero_seriale || 'N/D'}
+                              </span>
+                              {macch.numero_libro && (
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  Libro: {macch.numero_libro}
+                                </p>
+                              )}
+                            </td>
+                            
+                            {/* Data Installazione */}
+                            <td className="py-4 px-4">
+                              {macch.data_installazione ? (
+                                <span className="text-sm text-gray-700">
+                                  {new Date(macch.data_installazione).toLocaleDateString('it-IT', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-gray-400">N/D</span>
+                              )}
+                            </td>
+                            
+                            {/* Scadenza Manutenzione */}
+                            <td className="py-4 px-4">
+                              {scadenza.status === 'unknown' ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium text-gray-400 bg-gray-100">
+                                  Scaduto
+                                </span>
+                              ) : (
+                                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${scadenza.className}`}>
+                                  {ScadenzaIcon && <ScadenzaIcon className="w-3.5 h-3.5" />}
+                                  {scadenza.label}
+                                </div>
+                              )}
+                            </td>
+                            
+                            {/* Ticket Badge Cliccabile */}
+                            <td className="py-4 px-4 text-center">
+                              {macch.ticketAperti > 0 ? (
+                                <button
+                                  onClick={() => openTicketModal(macch)}
+                                  className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-red-100 text-red-700 font-bold text-sm rounded-full hover:bg-red-200 transition-colors"
+                                  title={`${macch.ticketAperti} ticket aperti - Clicca per vedere`}
+                                >
+                                  {macch.ticketAperti}
+                                </button>
+                              ) : macch.ticketTotali > 0 ? (
+                                <button
+                                  onClick={() => openTicketModal(macch)}
+                                  className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-100 text-gray-500 font-medium text-sm rounded-full hover:bg-gray-200 transition-colors"
+                                  title={`${macch.ticketTotali} ticket totali - Clicca per vedere`}
+                                >
+                                  {macch.ticketTotali}
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-50 text-gray-400 text-sm rounded-full">
+                                  0
+                                </span>
+                              )}
+                            </td>
+                            
+                            {/* Pulsante Nuovo Ticket */}
+                            <td className="py-4 px-4 text-center">
+                              <Link
+                                href={`/portal/ticket/nuovo?macchinario=${macch.id}`}
+                                className="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                title={`Apri nuovo ticket per ${macch.tipo_macchinario || 'questo macchinario'}`}
+                              >
+                                <Plus className="w-4 h-4" />
+                              </Link>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="text-center py-12">
                   <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 mb-4">Nessun macchinario registrato</p>
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    Aggiungi il primo macchinario
+                  <p className="text-gray-500 mb-2">Nessun macchinario registrato</p>
+                  <p className="text-sm text-gray-400">
+                    I macchinari verranno visualizzati qui una volta registrati nel sistema
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FATTURE SECTION */}
+          {activeSection === 'fatture' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveSection('overview')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
                   </button>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Le Mie Fatture
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {fatture.length} fatture • {fattureNonPagate} da pagare
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {fatture.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Numero
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Data
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Descrizione
+                        </th>
+                        <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Importo
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Stato
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Azioni
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {fatture.map((fattura) => (
+                        <tr key={fattura.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="font-mono text-sm font-medium text-gray-900">
+                              {fattura.numero_fattura}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-sm text-gray-600">
+                              {new Date(fattura.data_emissione).toLocaleDateString('it-IT')}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-sm text-gray-900 line-clamp-1">
+                              {fattura.descrizione || 'Fattura servizi'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="font-semibold text-gray-900">
+                              € {(fattura.importo_totale || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getStatoFatturaBadge(fattura.stato)}`}>
+                              {getStatoFatturaLabel(fattura.stato)}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <button
+                              onClick={() => downloadFattura(fattura)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Visualizza PDF"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Nessuna fattura presente</p>
                 </div>
               )}
             </div>
@@ -1118,6 +1311,98 @@ export default function CustomerDashboard() {
         </div>
 
       </main>
+
+      {/* ✅ NUOVO: Modal Ticket Macchinario */}
+      {ticketModalOpen && selectedMacchinario && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Wrench className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Ticket - {selectedMacchinario.tipo_macchinario || 'Macchinario'}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {selectedMacchinario.marca && `${selectedMacchinario.marca} `}{selectedMacchinario.modello || ''} • Matr: {selectedMacchinario.numero_seriale || 'N/D'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setTicketModalOpen(false)
+                  setSelectedMacchinario(null)
+                  setMacchinarioTickets([])
+                }}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            
+            {/* Contenuto Modal */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {macchinarioTickets.length > 0 ? (
+                <div className="space-y-3">
+                  {macchinarioTickets.map((ticket) => (
+                    <Link
+                      key={ticket.id}
+                      href={`/portal/ticket/${ticket.id}`}
+                      onClick={() => setTicketModalOpen(false)}
+                      className="block p-4 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 transition-all"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-mono text-gray-500">
+                            #{ticket.numero_ticket}
+                          </span>
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
+                            {getStatoLabel(ticket.stato)}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {new Date(ticket.data_apertura).toLocaleDateString('it-IT')}
+                        </span>
+                      </div>
+                      <h4 className="font-medium text-gray-900 mb-1">
+                        {ticket.oggetto}
+                      </h4>
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {ticket.descrizione}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Ticket className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">Nessun ticket per questo macchinario</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {macchinarioTickets.length} ticket trovati
+                </p>
+                <Link
+                  href={`/portal/ticket/nuovo?macchinario=${selectedMacchinario.id}`}
+                  onClick={() => setTicketModalOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nuovo Ticket per questo macchinario
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal PDF Viewer */}
       {pdfViewerOpen && pdfViewerUrl && (

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { AlertCircle, CheckCircle, Clock, TrendingUp, Zap, User, Settings } from 'lucide-react'
+import { AlertCircle, CheckCircle, Clock, TrendingUp, Zap, User, Settings, Users } from 'lucide-react'
 import Link from 'next/link'
 import TicketActionsModal from '@/components/TicketActionsModal'
 
@@ -20,12 +20,14 @@ export default function DashboardTecnico() {
     inLavorazione: 0,
     risoltiOggi: 0,
     critici: 0,
-    tempoMedioRisoluzione: '-'
+    tempoMedioRisoluzione: '-',
+    totalClienti: 0
   })
 
   useEffect(() => {
     if (userProfile?.id) {
       loadTicketsTecnico()
+      loadClientiCount()
     }
   }, [userProfile])
 
@@ -68,6 +70,20 @@ export default function DashboardTecnico() {
     }
   }
 
+  // 🆕 Carica conteggio clienti
+  async function loadClientiCount() {
+    try {
+      const { count } = await supabase
+        .from('clienti')
+        .select('*', { count: 'exact', head: true })
+        .eq('attivo', true)
+      
+      setStats(prev => ({ ...prev, totalClienti: count || 0 }))
+    } catch (error) {
+      console.error('Errore caricamento clienti:', error)
+    }
+  }
+
   function calcolaStats() {
     const aperti = tickets.filter(t => t.stato === 'aperto' || t.stato === 'assegnato').length
     const inLavorazione = tickets.filter(t => t.stato === 'in_lavorazione').length
@@ -103,14 +119,15 @@ export default function DashboardTecnico() {
       tempoMedioRisoluzione = `${(sommaOre / ticketRisoltiRecenti.length).toFixed(1)}h`
     }
 
-    setStats({
+    setStats(prev => ({
+      ...prev,
       totaliAssegnati: tickets.length,
       aperti,
       inLavorazione,
       risoltiOggi,
       critici,
       tempoMedioRisoluzione
-    })
+    }))
   }
 
   function handleAzioniClick(ticket, e) {
@@ -213,7 +230,7 @@ export default function DashboardTecnico() {
           </div>
         </div>
 
-        {/* KPI Cards Tecnico */}
+        {/* KPI Cards Tecnico - 🆕 Aggiunta card Clienti */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -280,33 +297,33 @@ export default function DashboardTecnico() {
             <p className="text-gray-500 dark:text-gray-400 text-sm">Risoluzione (30gg)</p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-lg">
-                <User className="text-indigo-600 dark:text-indigo-400" size={24} />
+          {/* 🆕 NUOVA CARD: Clienti con link */}
+          <Link href="/clienti">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-lg">
+                  <Users className="text-indigo-600 dark:text-indigo-400" size={24} />
+                </div>
+                <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalClienti}</span>
               </div>
-              <span className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totaliAssegnati}</span>
+              <h3 className="text-gray-900 dark:text-white text-lg font-semibold mb-1">Clienti</h3>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">Visualizza anagrafica</p>
             </div>
-            <h3 className="text-gray-900 dark:text-white text-lg font-semibold mb-1">Totale Assegnati</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Tutti i tuoi ticket</p>
-          </div>
+          </Link>
         </div>
 
-        {/* Sezione Ticket Critici/Urgenti */}
+        {/* Sezione Ticket Critici */}
         {ticketCritici.length > 0 && (
           <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="text-red-600" size={24} />
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                ⚠️ Ticket Urgenti ({ticketCritici.length})
-              </h2>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              🚨 Urgenti ({ticketCritici.length})
+            </h2>
             <div className="space-y-4">
               {ticketCritici.map((ticket) => (
                 <div
                   key={ticket.id}
                   onClick={() => handleAzioniClick(ticket, null)}
-                  className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-800 rounded-xl p-6 hover:shadow-lg transition-all cursor-pointer"
+                  className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-xl shadow-sm border-2 border-red-200 dark:border-red-800 p-6 hover:shadow-md transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -316,7 +333,7 @@ export default function DashboardTecnico() {
                             e.stopPropagation()
                             handleAzioniClick(ticket, e)
                           }}
-                          className="font-mono text-sm font-semibold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:underline"
+                          className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
                         >
                           {ticket.numero_ticket}
                         </button>
@@ -341,7 +358,7 @@ export default function DashboardTecnico() {
                         {ticket.oggetto}
                       </h4>
                       
-                      <p className="text-gray-700 dark:text-gray-300 mb-3 line-clamp-2 text-sm">
+                      <p className="text-gray-600 dark:text-gray-400 mb-3 line-clamp-2 text-sm">
                         {ticket.descrizione}
                       </p>
                       
