@@ -1,3 +1,13 @@
+// contexts/CustomerAuthContext.jsx
+// Context di autenticazione per il Portale Clienti
+//
+// 🔧 MODIFICHE APPLICATE (4 Dic 2025):
+// 1. ✅ Supporto multi-sede: carica tutte le sedi con stessa P.IVA
+// 2. ✅ Stato sediCollegate[] per lista sedi
+// 3. ✅ Stato sedeAttiva per sede selezionata
+// 4. ✅ Funzione cambiaSedeAttiva() per switch sede
+// 5. ✅ isMultiSede helper per UI condizionale
+
 'use client'
 
 import { createContext, useContext, useState, useEffect } from 'react'
@@ -20,6 +30,10 @@ export function CustomerAuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
+  // ✅ NUOVO: Stati per gestione multi-sede
+  const [sediCollegate, setSediCollegate] = useState([])
+  const [sedeAttiva, setSedeAttiva] = useState(null)
+
   useEffect(() => {
     // Verifica sessione iniziale
     checkSession()
@@ -36,6 +50,9 @@ export function CustomerAuthProvider({ children }) {
         else if (event === 'SIGNED_OUT') {
           setUser(null)
           setCustomerProfile(null)
+          // ✅ Reset multi-sede
+          setSediCollegate([])
+          setSedeAttiva(null)
         }
         else if (event === 'TOKEN_REFRESHED') {
           console.log('✅ Customer token refreshed')
@@ -72,6 +89,8 @@ export function CustomerAuthProvider({ children }) {
           await supabase.auth.signOut()
           setUser(null)
           setCustomerProfile(null)
+          setSediCollegate([])
+          setSedeAttiva(null)
           setLoading(false)
           return
         }
@@ -105,13 +124,12 @@ export function CustomerAuthProvider({ children }) {
           cliente:clienti(*)
         `)
         .eq('id', userId)
-        .maybeSingle() // Usa maybeSingle per evitare errori se non esiste
+        .maybeSingle()
 
       if (userError) {
         console.error('❌ Profilo non trovato nel DB:', userError)
         
         // Se il profilo non esiste, potrebbe essere un nuovo utente
-        // che deve completare l'onboarding
         console.log('⚠️ Usando profilo virtuale temporaneo')
         setCustomerProfile({
           id: userId,
@@ -138,7 +156,6 @@ export function CustomerAuthProvider({ children }) {
       }
 
       // 🔧 FIX: Appiattisce i dati del cliente per accesso diretto
-      // Ora puoi usare customerProfile.ragione_sociale invece di customerProfile.cliente.ragione_sociale
       const profile = {
         // Dati da customer_portal_users
         id: customerUser.id,
@@ -148,17 +165,18 @@ export function CustomerAuthProvider({ children }) {
         created_at: customerUser.created_at,
         updated_at: customerUser.updated_at,
         
-        // 🎯 DATI APPIATTITI dalla tabella clienti (copiati al primo livello)
+        // 🎯 DATI APPIATTITI dalla tabella clienti
         ragione_sociale: customerUser.cliente?.ragione_sociale || '',
         partita_iva: customerUser.cliente?.partita_iva || '',
         codice_fiscale: customerUser.cliente?.codice_fiscale || '',
+        codice_cliente: customerUser.cliente?.codice_cliente || '',
         indirizzo: customerUser.cliente?.indirizzo || '',
         citta: customerUser.cliente?.citta || '',
         cap: customerUser.cliente?.cap || '',
         provincia: customerUser.cliente?.provincia || '',
-        telefono: customerUser.cliente?.telefono || '',
-        email_cliente: customerUser.cliente?.email || customerUser.email, // Fallback a email auth
-        pec: customerUser.cliente?.pec || '',
+        telefono: customerUser.cliente?.telefono_principale || '',
+        email_cliente: customerUser.cliente?.email_principale || customerUser.email,
+        pec: customerUser.cliente?.email_pec || '',
         email_amministrazione: customerUser.cliente?.email_amministrazione || '',
         sito_web: customerUser.cliente?.sito_web || '',
         note: customerUser.cliente?.note || '',
@@ -172,6 +190,15 @@ export function CustomerAuthProvider({ children }) {
 
       setCustomerProfile(profile)
       console.log('✅ Profilo cliente appiattito e caricato:', profile)
+
+      // ✅ NUOVO: Carica sedi collegate via P.IVA
+      if (customerUser.cliente?.partita_iva) {
+        await loadSediCollegate(customerUser.cliente.partita_iva, customerUser.cliente_id)
+      } else {
+        // Nessuna P.IVA, nessuna sede collegata
+        setSediCollegate([])
+        setSedeAttiva(null)
+      }
       
       // Verifica stato onboarding
       await checkOnboardingStatus(userId, customerUser.cliente_id)
@@ -182,16 +209,112 @@ export function CustomerAuthProvider({ children }) {
     }
   }
 
+  // ✅ NUOVO: Carica tutte le sedi con stessa P.IVA
+  async function loadSediCollegate(partitaIva, clienteIdPrincipale) {
+    try {
+      console.log('🏢 Ricerca sedi collegate per P.IVA:', partitaIva)
+
+      const { data: sedi, error } = await supabase
+        .from('clienti')
+        .select(`
+          id,
+          codice_cliente,
+          ragione_sociale,
+          partita_iva,
+          indirizzo,
+          citta,
+          cap,
+          provincia,
+          telefono_principale,
+          email_principale
+        `)
+        .eq('partita_iva', partitaIva)
+        .eq('attivo', true)
+        .order('ragione_sociale')
+
+      if (error) {
+        console.error('❌ Errore caricamento sedi:', error)
+        setSediCollegate([])
+        setSedeAttiva(null)
+        return
+      }
+
+      console.log(`✅ Trovate ${sedi?.length || 0} sedi con P.IVA ${partitaIva}`)
+
+      if (sedi && sedi.length > 0) {
+        // Formatta le sedi con info utili per il picker
+        const sediFormattate = sedi.map(sede => ({
+          ...sede,
+          // Label per il dropdown
+          label: `${sede.citta || 'N/D'} - ${sede.indirizzo || sede.ragione_sociale}`,
+          // Flag se è la sede principale (quella collegata all'utente)
+          isPrincipale: sede.id === clienteIdPrincipale
+        }))
+
+        setSediCollegate(sediFormattate)
+
+        // Imposta sede attiva = sede principale (o prima sede se non trovata)
+        const sedePrincipale = sediFormattate.find(s => s.isPrincipale) || sediFormattate[0]
+        setSedeAttiva(sedePrincipale)
+
+        console.log('🏢 Sedi caricate:', sediFormattate.map(s => s.codice_cliente))
+        console.log('📍 Sede attiva:', sedePrincipale?.codice_cliente)
+      } else {
+        setSediCollegate([])
+        setSedeAttiva(null)
+      }
+
+    } catch (error) {
+      console.error('❌ Errore caricamento sedi collegate:', error)
+      setSediCollegate([])
+      setSedeAttiva(null)
+    }
+  }
+
+  // ✅ NUOVO: Cambia sede attiva
+  function cambiaSedeAttiva(clienteId) {
+    const nuovaSede = sediCollegate.find(s => s.id === clienteId)
+    
+    if (nuovaSede) {
+      console.log('🔄 Cambio sede attiva:', nuovaSede.codice_cliente, nuovaSede.citta)
+      setSedeAttiva(nuovaSede)
+      
+      // Salva preferenza in localStorage per persistenza
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sedeAttiva', clienteId)
+      }
+      
+      return true
+    }
+    
+    console.warn('⚠️ Sede non trovata:', clienteId)
+    return false
+  }
+
+  // ✅ NUOVO: Ripristina sede da localStorage all'avvio
+  useEffect(() => {
+    if (sediCollegate.length > 1 && typeof window !== 'undefined') {
+      const sedeIdSalvata = localStorage.getItem('sedeAttiva')
+      
+      if (sedeIdSalvata) {
+        const sedeSalvata = sediCollegate.find(s => s.id === sedeIdSalvata)
+        if (sedeSalvata && sedeSalvata.id !== sedeAttiva?.id) {
+          console.log('🔄 Ripristino sede da localStorage:', sedeSalvata.codice_cliente)
+          setSedeAttiva(sedeSalvata)
+        }
+      }
+    }
+  }, [sediCollegate])
+
   async function checkOnboardingStatus(userId, clienteId) {
     try {
-      // Verifica se esiste un record nella tabella customer_onboarding_status
       const { data, error } = await supabase
         .from('customer_onboarding_status')
         .select('*')
         .eq('cliente_id', clienteId)
-        .maybeSingle() // Usa maybeSingle invece di single per evitare errore se non esiste
+        .maybeSingle()
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found (ok)
+      if (error && error.code !== 'PGRST116') {
         console.error('❌ Errore check onboarding:', error)
         return
       }
@@ -317,6 +440,15 @@ export function CustomerAuthProvider({ children }) {
       
       setUser(null)
       setCustomerProfile(null)
+      // ✅ Reset multi-sede
+      setSediCollegate([])
+      setSedeAttiva(null)
+      
+      // Pulisci localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('sedeAttiva')
+      }
+      
       router.push('/portal')
     } catch (error) {
       console.error('❌ Errore logout cliente:', error)
@@ -378,6 +510,9 @@ export function CustomerAuthProvider({ children }) {
   // Helper per verificare stato onboarding
   const needsOnboarding = customerProfile?._needsOnboarding === true
   const isActive = customerProfile?.attivo === true
+  
+  // ✅ NUOVO: Helper per multi-sede
+  const isMultiSede = sediCollegate.length > 1
 
   const value = {
     user,
@@ -391,7 +526,13 @@ export function CustomerAuthProvider({ children }) {
     updateProfile,
     refreshProfile,
     needsOnboarding,
-    isActive
+    isActive,
+    
+    // ✅ NUOVO: Esporta stati e funzioni multi-sede
+    sediCollegate,
+    sedeAttiva,
+    cambiaSedeAttiva,
+    isMultiSede
   }
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>

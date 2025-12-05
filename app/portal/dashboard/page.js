@@ -1,5 +1,5 @@
 // app/portal/dashboard/page.js
-// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE + TICKET CLICCABILI + MACCHINARI INSTALLATI
+// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE + TICKET CLICCABILI + MACCHINARI + MULTI-SEDE
 //
 // 🔧 MODIFICHE APPLICATE (28 Nov 2025):
 // 1. ✅ KPI Cards cliccabili per navigare tra le sezioni
@@ -18,6 +18,9 @@
 // 10. ✅ Badge numerico ticket aperti per ogni macchinario
 // 11. ✅ Modal per consultare ticket del macchinario specifico
 // 12. ✅ Indicatore scadenza manutenzione con alert visivo
+// 13. ✅ MULTI-SEDE: Supporto clienti con più sedi (stessa P.IVA)
+// 14. ✅ MULTI-SEDE: SedePicker per switch sede senza ri-login
+// 15. ✅ MULTI-SEDE: Filtro dati per sede attiva
 
 'use client'
 
@@ -26,6 +29,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
+import SedePicker, { SedeBadge } from '@/components/SedePicker'
 import { supabase } from '@/lib/supabase'
 import {
   Building2, Users, Wrench, FileText, LogOut,
@@ -37,7 +41,16 @@ import {
 
 export default function CustomerDashboard() {
   const router = useRouter()
-  const { user, customerProfile, authLoading, signOut } = useCustomerAuth()
+  const { 
+    user, 
+    customerProfile, 
+    authLoading, 
+    signOut,
+    // ✅ MULTI-SEDE
+    sedeAttiva,
+    sediCollegate,
+    isMultiSede 
+  } = useCustomerAuth()
 
   // Stati
   const [loading, setLoading] = useState(true)
@@ -71,23 +84,25 @@ export default function CustomerDashboard() {
 
   // Caricamento dati dashboard
   useEffect(() => {
+    // ✅ MULTI-SEDE: Ricarica quando cambia profilo O quando cambia sede attiva
     if (customerProfile?.id) {
       loadDashboardData()
     }
-  }, [customerProfile])
+  }, [customerProfile, sedeAttiva?.id])
 
   const loadDashboardData = async () => {
     try {
       setLoading(true)
-      const clienteId = customerProfile.cliente_id
-      const codiceCliente = customerProfile.codice_cliente
+      // ✅ MULTI-SEDE: Usa sedeAttiva se disponibile, altrimenti fallback a customerProfile
+      const clienteId = sedeAttiva?.id || customerProfile.cliente_id
+      const codiceCliente = sedeAttiva?.codice_cliente || customerProfile.codice_cliente
 
       if (!clienteId) {
         console.error('❌ cliente_id non trovato in customerProfile:', customerProfile)
         throw new Error('ID cliente non disponibile')
       }
 
-      console.log('📊 Caricamento dashboard per cliente:', clienteId, 'codice:', codiceCliente)
+      console.log('📊 Caricamento dashboard per cliente:', clienteId, 'codice:', codiceCliente, isMultiSede ? '(multi-sede)' : '')
 
       // Carica referenti
       const { data: referentiData } = await supabase
@@ -418,6 +433,11 @@ export default function CustomerDashboard() {
                   Portale Assistenza Tecnica
                 </p>
               </div>
+              
+              {/* ✅ MULTI-SEDE: Selettore Sede */}
+              {isMultiSede && (
+                <SedePicker className="hidden md:block ml-4" />
+              )}
             </div>
 
             {/* User menu */}
@@ -448,11 +468,22 @@ export default function CustomerDashboard() {
         
         {/* Hero Banner */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-8 mb-8 text-white">
-          <h2 className="text-3xl font-bold mb-2">
-            Benvenuto, {cliente?.ragione_sociale}!
-          </h2>
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <h2 className="text-3xl font-bold">
+              Benvenuto, {cliente?.ragione_sociale}!
+            </h2>
+            {/* ✅ MULTI-SEDE: Badge sede corrente */}
+            {isMultiSede && sedeAttiva && (
+              <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-medium">
+                📍 {sedeAttiva.citta} ({sediCollegate.length} sedi)
+              </span>
+            )}
+          </div>
           <p className="text-blue-100 mb-6">
-            Gestisci la tua assistenza tecnica in un unico posto
+            {isMultiSede && sedeAttiva
+              ? `Stai visualizzando: ${sedeAttiva.indirizzo || sedeAttiva.citta} (${sedeAttiva.codice_cliente})`
+              : 'Gestisci la tua assistenza tecnica in un unico posto'
+            }
           </p>
           <div className="flex flex-wrap gap-3">
             <Link

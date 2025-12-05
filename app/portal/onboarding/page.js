@@ -1,5 +1,11 @@
 // app/portal/onboarding/page.js
 // Onboarding Intelligente - Carica dati esistenti se cliente già presente
+//
+// 🔧 MODIFICHE APPLICATE (4 Dic 2025):
+// 1. ✅ MULTI-SEDE: Usa sedeAttiva invece di customerProfile.cliente_id
+// 2. ✅ MULTI-SEDE: SedePicker nell'header per cambio sede
+// 3. ✅ MULTI-SEDE: Ricarica dati quando cambia sede
+// 4. ✅ MULTI-SEDE: Banner info sede corrente
 
 'use client'
 
@@ -7,12 +13,22 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
 import CustomerOnboardingWizard from '@/components/CustomerOnboardingWizard'
+import SedePicker from '@/components/SedePicker'
 import { supabase } from '@/lib/supabase'
-import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, AlertCircle, Building2, MapPin } from 'lucide-react'
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { user, customerProfile, authLoading } = useCustomerAuth()
+  const { 
+    user, 
+    customerProfile, 
+    authLoading,
+    // ✅ MULTI-SEDE
+    sedeAttiva,
+    sediCollegate,
+    isMultiSede 
+  } = useCustomerAuth()
+  
   const [isComplete, setIsComplete] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [preloadedData, setPreloadedData] = useState(null)
@@ -26,30 +42,36 @@ export default function OnboardingPage() {
     }
   }, [user, authLoading, router])
 
-  // Carica dati esistenti dal database se il cliente esiste
+  // ✅ MULTI-SEDE: Carica dati esistenti per la sede attiva
   useEffect(() => {
     async function loadExistingData() {
-      if (!user?.email) {
-        setLoadingData(false)
+      // Aspetta che sedeAttiva sia disponibile (per multi-sede) o usa customerProfile
+      const clienteId = sedeAttiva?.id || customerProfile?.cliente_id
+      
+      if (!clienteId) {
+        console.log('⏳ Attendo cliente_id...')
         return
       }
 
+      setLoadingData(true)
+      setPreloadedData(null) // Reset dati precedenti
+      
       try {
-        console.log('🔍 Ricerca cliente esistente per email:', user.email)
+        console.log('🔍 Caricamento dati per sede:', clienteId, sedeAttiva?.citta || '')
         
-        // 1. Cerca cliente per email principale
+        // 1. Carica dati cliente
         const { data: clienteData, error: clienteError } = await supabase
           .from('clienti')
           .select('*')
-          .or(`email_principale.eq.${user.email},email_amministrazione.eq.${user.email},email_pec.eq.${user.email}`)
+          .eq('id', clienteId)
           .single()
 
-        if (clienteError && clienteError.code !== 'PGRST116') {
+        if (clienteError) {
           throw clienteError
         }
 
         if (!clienteData) {
-          console.log('ℹ️ Nessun cliente esistente trovato')
+          console.log('ℹ️ Nessun cliente trovato')
           setLoadingData(false)
           return
         }
@@ -60,7 +82,7 @@ export default function OnboardingPage() {
         const { data: referentiData } = await supabase
           .from('customer_referenti')
           .select('*')
-          .eq('cliente_id', clienteData.id)
+          .eq('cliente_id', clienteId)
           .eq('attivo', true)
 
         console.log(`📋 Caricati ${referentiData?.length || 0} referenti`)
@@ -69,7 +91,7 @@ export default function OnboardingPage() {
         const { data: macchinariData } = await supabase
           .from('macchinari')
           .select('*')
-          .eq('id_cliente', clienteData.id)
+          .eq('id_cliente', clienteId)
           .eq('stato', 'attivo')
 
         console.log(`🔧 Caricati ${macchinariData?.length || 0} macchinari`)
@@ -80,12 +102,12 @@ export default function OnboardingPage() {
           ragione_sociale: clienteData.ragione_sociale || '',
           partita_iva: clienteData.partita_iva || '',
           codice_fiscale: clienteData.codice_fiscale || '',
-          indirizzo: clienteData.via || '',
+          indirizzo: clienteData.indirizzo || '',
           citta: clienteData.citta || '',
           cap: clienteData.cap || '',
           provincia: clienteData.provincia || '',
           telefono: clienteData.telefono_principale || '',
-          email: clienteData.email_principale || user.email,
+          email: clienteData.email_principale || user?.email || '',
           pec: clienteData.email_pec || '',
           email_amministrazione: clienteData.email_amministrazione || '',
           sito_web: clienteData.sito_web || '',
@@ -143,11 +165,17 @@ export default function OnboardingPage() {
           // Metadata
           _clienteEsistente: true,
           _clienteId: clienteData.id,
+          _codiceCliente: clienteData.codice_cliente,
+          _sedeInfo: sedeAttiva ? {
+            citta: sedeAttiva.citta,
+            indirizzo: sedeAttiva.indirizzo,
+            codice: sedeAttiva.codice_cliente
+          } : null,
           _numeroMacchinari: macchinariData?.length || 0,
           _numeroReferenti: referentiData?.length || 0
         }
 
-        console.log('✨ Dati pre-caricati con successo!')
+        console.log('✨ Dati pre-caricati con successo per sede:', clienteData.codice_cliente)
         setPreloadedData(formattedData)
 
       } catch (err) {
@@ -161,21 +189,26 @@ export default function OnboardingPage() {
     if (user && !authLoading) {
       loadExistingData()
     }
-  }, [user, authLoading])
+  }, [user, authLoading, sedeAttiva?.id]) // ✅ Ricarica quando cambia sede
 
   // ==================== HANDLER COMPLETAMENTO ONBOARDING ====================
   
   const handleOnboardingComplete = async (wizardData) => {
     console.log('📤 Invio dati onboarding all\'API...')
     
+    // ✅ MULTI-SEDE: Aggiungi cliente_id della sede attiva
+    const dataWithClienteId = {
+      ...wizardData,
+      cliente_id: sedeAttiva?.id || customerProfile?.cliente_id
+    }
+    
     try {
-      // Chiama l'endpoint API per salvare tutto
       const response = await fetch('/api/customer/onboarding/complete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(wizardData)
+        body: JSON.stringify(dataWithClienteId)
       })
 
       const result = await response.json()
@@ -197,7 +230,7 @@ export default function OnboardingPage() {
     } catch (err) {
       console.error('❌ Errore completamento onboarding:', err)
       alert('Errore durante il salvataggio: ' + err.message + '\nRiprova o contatta il supporto.')
-      throw err // Rilancia l'errore per gestione nel wizard
+      throw err
     }
   }
 
@@ -226,7 +259,10 @@ export default function OnboardingPage() {
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-900 font-semibold mb-2">Caricamento dati...</p>
           <p className="text-gray-600 text-sm">
-            Stiamo controllando se hai già dei dati nel nostro sistema
+            {isMultiSede && sedeAttiva 
+              ? `Caricamento dati per sede: ${sedeAttiva.citta}`
+              : 'Stiamo controllando se hai già dei dati nel nostro sistema'
+            }
           </p>
         </div>
       </div>
@@ -246,6 +282,14 @@ export default function OnboardingPage() {
           </h2>
           <p className="text-gray-600 mb-6">
             I tuoi dati sono stati salvati con successo.
+            {isMultiSede && sedeAttiva && (
+              <>
+                <br />
+                <span className="text-sm text-gray-500">
+                  Sede: {sedeAttiva.citta} ({sedeAttiva.codice_cliente})
+                </span>
+              </>
+            )}
             <br />
             Tra pochi istanti verrai reindirizzato alla dashboard...
           </p>
@@ -254,6 +298,35 @@ export default function OnboardingPage() {
             <span>Reindirizzamento in corso...</span>
           </div>
         </div>
+      </div>
+    )
+  }
+
+  // ✅ MULTI-SEDE: Banner info sede corrente
+  const SedeBanner = () => {
+    if (!isMultiSede || !sedeAttiva) return null
+
+    return (
+      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-blue-900">
+                Compilazione Infrastruttura Sede
+              </h3>
+              <p className="text-blue-700 text-sm">
+                📍 {sedeAttiva.citta} - {sedeAttiva.indirizzo || sedeAttiva.ragione_sociale} ({sedeAttiva.codice_cliente})
+              </p>
+            </div>
+          </div>
+          <SedePicker />
+        </div>
+        <p className="text-blue-600 text-xs mt-2">
+          💡 Hai {sediCollegate.length} sedi. Puoi compilare l'infrastruttura per ciascuna sede separatamente.
+        </p>
       </div>
     )
   }
@@ -351,11 +424,14 @@ export default function OnboardingPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* ✅ MULTI-SEDE: Banner sede corrente */}
+        <SedeBanner />
+        
         <DataLoadedBanner />
         <ErrorBanner />
         
         <CustomerOnboardingWizard
-          clienteId={customerProfile?.id || preloadedData?._clienteId}
+          clienteId={sedeAttiva?.id || customerProfile?.cliente_id || preloadedData?._clienteId}
           onComplete={handleOnboardingComplete}
           initialData={preloadedData}
         />
