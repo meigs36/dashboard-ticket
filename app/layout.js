@@ -1,8 +1,10 @@
+// app/layout.js
+// Root Layout - SENZA link manifest hardcoded (gestito da metadata)
+
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Providers } from '@/components/Providers'
 import LayoutClient from '@/components/LayoutClient'
 import PWAInstaller from "@/components/PWAInstaller"
-// import ServiceWorkerRegister from "@/components/ServiceWorkerRegister" // ← COMMENTATO PER FIX 401
 import './globals.css'
 import './mobile-media-fixes.css'
 
@@ -33,7 +35,7 @@ export const metadata = {
   authors: [{ name: "Odonto Service" }],
 }
 
-// ✅ Viewport export separato (richiesto da Next.js 14+)
+// Viewport export separato (richiesto da Next.js 14+)
 export const viewport = {
   width: "device-width",
   initialScale: 1,
@@ -47,7 +49,7 @@ export default function RootLayout({ children }) {
     <html lang="it" suppressHydrationWarning>
       <head>
         <script src="/sw-unregister.js" />
-        <link rel="manifest" href="/manifest.json" />
+        {/* RIMOSSO: <link rel="manifest" ... /> - ora gestito da metadata */}
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -63,7 +65,6 @@ export default function RootLayout({ children }) {
             </LayoutClient>
           </AuthProvider>
         </Providers>
-        {/* <ServiceWorkerRegister /> */}
         <PWAInstaller />
       </body>
     </html>

@@ -1,14 +1,12 @@
 // app/portal/layout.js
 // Layout Portale Clienti con supporto PWA - Next.js 16
+// NOTA: Non include <html> e <body> perché sono nel root layout
 
-import { Inter } from 'next/font/google'
 import PWAPortalProvider from '@/components/portal/PWAPortalProvider'
 import PWAInstallPrompt from '@/components/portal/PWAInstallPrompt'
 import { CustomerAuthProvider } from '@/contexts/CustomerAuthContext'
 
-const inter = Inter({ subsets: ['latin'] })
-
-// Metadata (senza viewport e themeColor)
+// Metadata - SOVRASCRIVE quello del root layout per /portal/*
 export const metadata = {
   title: 'ODONTO SERVICE - Portale Clienti',
   description: 'Portale Clienti per la gestione dell\'assistenza tecnica odontoiatrica',
@@ -16,7 +14,7 @@ export const metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'OdontoService',
+    title: 'OdontoService Clienti',
   },
   icons: {
     icon: [
@@ -40,30 +38,13 @@ export const viewport = {
 }
 
 export default function PortalLayout({ children }) {
+  // NOTA: Non wrappare con <html> e <body> - sono già nel root layout!
   return (
-    <html lang="it">
-      <head>
-        {/* IMPORTANTE: Forza il manifest del portal (sovrascrive root layout) */}
-        <link rel="manifest" href="/manifest-portal.json" />
-        
-        {/* PWA iOS */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="OdontoService Clienti" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        
-        {/* Theme color per portal (blu) */}
-        <meta name="theme-color" content="#2563EB" />
-      </head>
-      <body className="antialiased bg-gray-50 dark:bg-gray-900">
-        <CustomerAuthProvider>
-          <PWAPortalProvider>
-            {children}
-            <PWAInstallPrompt />
-          </PWAPortalProvider>
-        </CustomerAuthProvider>
-      </body>
-    </html>
+    <CustomerAuthProvider>
+      <PWAPortalProvider>
+        {children}
+        <PWAInstallPrompt />
+      </PWAPortalProvider>
+    </CustomerAuthProvider>
   )
 }
