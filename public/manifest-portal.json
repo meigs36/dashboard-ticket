@@ -1,0 +1,48 @@
+{
+  "name": "ODONTO SERVICE - Portale Clienti",
+  "short_name": "OdontoService",
+  "description": "Portale Clienti per la gestione dell'assistenza tecnica odontoiatrica",
+  "start_url": "/portal",
+  "scope": "/portal",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#2563EB",
+  "categories": ["business", "productivity", "utilities"],
+  "lang": "it-IT",
+  "icons": [
+    {
+      "src": "/favicon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Apri Ticket",
+      "short_name": "Nuovo Ticket",
+      "description": "Apri una nuova richiesta di assistenza",
+      "url": "/portal/ticket/nuovo"
+    },
+    {
+      "name": "I Miei Macchinari",
+      "short_name": "Macchinari",
+      "description": "Visualizza i tuoi macchinari",
+      "url": "/portal/dashboard?section=macchinari"
+    }
+  ],
+  "prefer_related_applications": false
+}

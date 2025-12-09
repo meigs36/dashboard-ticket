@@ -1,5 +1,5 @@
 // app/portal/page.js
-// Landing Page Completa Portale Clienti OdontoService
+// Landing Page Completa Portale Clienti ODONTO SERVICE
 
 'use client'
 
@@ -30,7 +30,8 @@ import {
   FileSignature,
   History,
   Settings,
-  Star
+  Star,
+  Globe
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -132,7 +133,7 @@ function PortalPageContent() {
             <div className="flex items-center gap-3">
               <Image 
                 src="/Logo.webp" 
-                alt="Odonto Service" 
+                alt="ODONTO SERVICE" 
                 width={100}
                 height={75}
                 className="object-contain"
@@ -270,7 +271,7 @@ function PortalPageContent() {
           <div className="flex items-center">
             <Image 
               src="/Logo.webp" 
-              alt="Odonto Service" 
+              alt="ODONTO SERVICE" 
               width={120}
               height={90}
               className="object-contain drop-shadow-md"
@@ -319,7 +320,7 @@ function PortalPageContent() {
             
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
               Portale Clienti<br />
-              <span className="text-blue-600">Odonto Service</span>
+              <span className="text-blue-600">ODONTO SERVICE</span>
             </h1>
             
             <p className="text-xl text-gray-600 mb-8 leading-relaxed">
@@ -682,43 +683,58 @@ function PortalPageContent() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-5xl mx-auto">
             
             {/* Phone */}
             <a 
-              href="tel:+390110000000" 
-              className="group p-8 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 hover:shadow-xl transition-all duration-300 text-center"
+              href="tel:+390544949554" 
+              className="group p-6 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100 hover:shadow-xl transition-all duration-300 text-center"
             >
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform">
-                <Phone className="w-8 h-8 text-white" />
+              <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                <Phone className="w-7 h-7 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Telefono</h3>
-              <p className="text-blue-600 font-semibold text-lg">011 000 0000</p>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Telefono</h3>
+              <p className="text-blue-600 font-semibold text-lg">0544 949554</p>
               <p className="text-gray-500 text-sm mt-2">Lun-Ven: 8:30-18:00</p>
             </a>
 
             {/* Email */}
             <a 
-              href="mailto:assistenza@odontoservice.it" 
-              className="group p-8 bg-gradient-to-br from-green-50 to-white rounded-2xl border border-green-100 hover:shadow-xl transition-all duration-300 text-center"
+              href="mailto:info@odontoservice.info" 
+              className="group p-6 bg-gradient-to-br from-green-50 to-white rounded-2xl border border-green-100 hover:shadow-xl transition-all duration-300 text-center"
             >
-              <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform">
-                <Mail className="w-8 h-8 text-white" />
+              <div className="w-14 h-14 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                <Mail className="w-7 h-7 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Email</h3>
-              <p className="text-green-600 font-semibold">assistenza@odontoservice.it</p>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Email</h3>
+              <p className="text-green-600 font-semibold">info@odontoservice.info</p>
               <p className="text-gray-500 text-sm mt-2">Risposta entro 24h</p>
             </a>
 
             {/* Address */}
-            <div className="group p-8 bg-gradient-to-br from-purple-50 to-white rounded-2xl border border-purple-100 hover:shadow-xl transition-all duration-300 text-center">
-              <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform">
-                <MapPin className="w-8 h-8 text-white" />
+            <div className="group p-6 bg-gradient-to-br from-purple-50 to-white rounded-2xl border border-purple-100 hover:shadow-xl transition-all duration-300 text-center">
+              <div className="w-14 h-14 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                <MapPin className="w-7 h-7 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Sede</h3>
-              <p className="text-gray-600">Via Example 123</p>
-              <p className="text-gray-600">10100 Torino (TO)</p>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Sede</h3>
+              <p className="text-gray-600">Viale Romagna n. 248-250</p>
+              <p className="text-gray-600">48125 Lido di Savio (RA)</p>
             </div>
+
+            {/* Website */}
+            <a 
+              href="https://www.odonto-service.it" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group p-6 bg-gradient-to-br from-orange-50 to-white rounded-2xl border border-orange-100 hover:shadow-xl transition-all duration-300 text-center"
+            >
+              <div className="w-14 h-14 bg-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                <Globe className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Sito Web</h3>
+              <p className="text-orange-600 font-semibold">www.odonto-service.it</p>
+              <p className="text-gray-500 text-sm mt-2">Scopri i nostri servizi</p>
+            </a>
 
           </div>
         </div>
@@ -733,13 +749,13 @@ function PortalPageContent() {
             <div className="md:col-span-2">
               <Image 
                 src="/Logo.webp" 
-                alt="Odonto Service" 
+                alt="ODONTO SERVICE" 
                 width={150}
                 height={112}
                 className="object-contain mb-4 brightness-0 invert opacity-90"
               />
               <p className="text-gray-400 leading-relaxed max-w-md">
-                Odonto Service è leader nell'assistenza tecnica per apparecchiature odontoiatriche. 
+                ODONTO SERVICE è leader nell'assistenza tecnica per apparecchiature odontoiatriche. 
                 Da oltre 30 anni al fianco dei professionisti del settore dentale.
               </p>
             </div>
@@ -766,24 +782,21 @@ function PortalPageContent() {
               </ul>
             </div>
 
-            {/* Legal */}
+            {/* Contact Info */}
             <div>
-              <h4 className="font-bold text-lg mb-4">Informazioni</h4>
-              <ul className="space-y-2">
-                <li>
-                  <a href="/privacy" className="text-gray-400 hover:text-white transition-colors">
-                    Privacy Policy
-                  </a>
+              <h4 className="font-bold text-lg mb-4">Contatti</h4>
+              <ul className="space-y-2 text-gray-400">
+                <li className="flex items-center gap-2">
+                  <Phone className="w-4 h-4" />
+                  <a href="tel:+390544949554" className="hover:text-white transition-colors">0544 949554</a>
                 </li>
-                <li>
-                  <a href="/terms" className="text-gray-400 hover:text-white transition-colors">
-                    Termini di Servizio
-                  </a>
+                <li className="flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  <a href="mailto:info@odontoservice.info" className="hover:text-white transition-colors">info@odontoservice.info</a>
                 </li>
-                <li>
-                  <a href="/cookies" className="text-gray-400 hover:text-white transition-colors">
-                    Cookie Policy
-                  </a>
+                <li className="flex items-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  <a href="https://www.odonto-service.it" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">www.odonto-service.it</a>
                 </li>
               </ul>
             </div>
@@ -792,10 +805,10 @@ function PortalPageContent() {
 
           <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-gray-500 text-sm">
-              © {new Date().getFullYear()} Odonto Service S.r.l. - Tutti i diritti riservati
+              © {new Date().getFullYear()} ODONTO SERVICE S.r.l. - Tutti i diritti riservati
             </p>
             <p className="text-gray-500 text-sm">
-              P.IVA: 00000000000 | REA: TO-000000
+              P.IVA: IT00595400391 | SDI: T04ZHR3
             </p>
           </div>
         </div>
