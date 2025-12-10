@@ -24,7 +24,7 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -54,6 +54,11 @@ export default function CustomerDashboard() {
 
   // Stati
   const [loading, setLoading] = useState(true)
+  
+  // ✅ FIX: Refs per evitare loop e freeze
+  const isLoadingData = useRef(false)
+  const dataLoadedForClient = useRef(null)
+  
   const [activeSection, setActiveSection] = useState('overview')
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [pdfViewerUrl, setPdfViewerUrl] = useState(null)
@@ -84,18 +89,49 @@ export default function CustomerDashboard() {
 
   // Caricamento dati dashboard
   useEffect(() => {
-    // ✅ MULTI-SEDE: Ricarica quando cambia profilo O quando cambia sede attiva
-    if (customerProfile?.id) {
-      loadDashboardData()
+    // ✅ FIX: Evita loop - carica solo se cliente valido e non già in caricamento
+    const clienteId = sedeAttiva?.id || customerProfile?.cliente_id
+    
+    if (clienteId && !isLoadingData.current) {
+      // Carica solo se è un cliente diverso da quello già caricato
+      if (dataLoadedForClient.current !== clienteId) {
+        loadDashboardData()
+      } else {
+        // Dati già caricati per questo cliente
+        setLoading(false)
+      }
     }
-  }, [customerProfile, sedeAttiva?.id])
+  }, [customerProfile?.cliente_id, sedeAttiva?.id])
 
   const loadDashboardData = async () => {
+    // ✅ FIX: Evita chiamate multiple
+    if (isLoadingData.current) {
+      console.log('⏳ Caricamento già in corso, skip')
+      return
+    }
+    
+    const clienteId = sedeAttiva?.id || customerProfile?.cliente_id
+    const codiceCliente = sedeAttiva?.codice_cliente || customerProfile?.codice_cliente
+
+    if (!clienteId) {
+      console.error('❌ cliente_id non trovato')
+      setLoading(false)
+      return
+    }
+
+    // ✅ FIX: Evita ricaricamento se già caricato per questo cliente
+    if (dataLoadedForClient.current === clienteId && dashboardData.cliente) {
+      console.log('⏳ Dati già caricati per cliente:', clienteId)
+      setLoading(false)
+      return
+    }
+
+    isLoadingData.current = true
+    
     try {
       setLoading(true)
       // ✅ MULTI-SEDE: Usa sedeAttiva se disponibile, altrimenti fallback a customerProfile
-      const clienteId = sedeAttiva?.id || customerProfile.cliente_id
-      const codiceCliente = sedeAttiva?.codice_cliente || customerProfile.codice_cliente
+      console.log('📊 Caricamento dashboard per cliente:', clienteId, 'codice:', codiceCliente)
 
       if (!clienteId) {
         console.error('❌ cliente_id non trovato in customerProfile:', customerProfile)
@@ -233,10 +269,14 @@ export default function CustomerDashboard() {
       })
       
       console.log('✅ Dashboard caricata')
+      
+      // ✅ FIX: Segna come caricato per questo cliente
+      dataLoadedForClient.current = clienteId
     } catch (error) {
       console.error('Errore caricamento dashboard:', error)
     } finally {
       setLoading(false)
+      isLoadingData.current = false
     }
   }
 
@@ -377,8 +417,8 @@ export default function CustomerDashboard() {
     return labels[stato] || stato
   }
 
-  // Loading state
-  if (authLoading || loading) {
+  // Loading state - ✅ FIX: Solo se non abbiamo dati
+  if (loading && !dashboardData.cliente) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -387,6 +427,12 @@ export default function CustomerDashboard() {
         </div>
       </div>
     )
+  }
+
+  // ✅ FIX: Se non c'è user, redirect
+  if (!user) {
+    router.push('/portal')
+    return null
   }
 
   const { cliente, referenti, macchinari, documenti, contratti, tickets, fatture } = dashboardData

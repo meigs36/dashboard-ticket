@@ -1,17 +1,6 @@
 // contexts/CustomerAuthContext.jsx
 // Context di autenticazione per il Portale Clienti
-//
-// 🔧 MODIFICHE APPLICATE (4 Dic 2025):
-// 1. ✅ Supporto multi-sede: carica tutte le sedi con stessa P.IVA
-// 2. ✅ Stato sediCollegate[] per lista sedi
-// 3. ✅ Stato sedeAttiva per sede selezionata
-// 4. ✅ Funzione cambiaSedeAttiva() per switch sede
-// 5. ✅ isMultiSede helper per UI condizionale
-//
-// 🔧 MODIFICHE APPLICATE (10 Dic 2025):
-// 6. ✅ FIX PWA FREEZE: Listener visibilitychange per ripristino sessione
-// 7. ✅ Ri-verifica sessione quando app torna in foreground
-// 8. ✅ Timeout per evitare loading infinito
+// ✅ FIX 10 Dic 2025: Risolto loop infinito su visibilitychange
 
 'use client'
 
@@ -35,23 +24,32 @@ export function CustomerAuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  // ✅ NUOVO: Stati per gestione multi-sede
+  // Stati per gestione multi-sede
   const [sediCollegate, setSediCollegate] = useState([])
   const [sedeAttiva, setSedeAttiva] = useState(null)
 
-  // ✅ FIX PWA: Ref per evitare check multipli
+  // ✅ FIX: Refs per evitare loop
   const isCheckingSession = useRef(false)
-  const lastVisibilityCheck = useRef(0)
+  const lastCheckTime = useRef(0)
+  const profileLoadedRef = useRef(false)
 
-  // ✅ FIX PWA: Funzione checkSession memorizzata
-  const checkSession = useCallback(async (force = false) => {
+  // ✅ FIX: Check sessione senza loop
+  const checkSession = useCallback(async () => {
     // Evita check multipli simultanei
-    if (isCheckingSession.current && !force) {
+    if (isCheckingSession.current) {
       console.log('⏳ Check sessione già in corso, skip')
       return
     }
 
+    // Evita check troppo frequenti (minimo 10 secondi)
+    const now = Date.now()
+    if (now - lastCheckTime.current < 10000) {
+      console.log('⏳ Check recente, skip')
+      return
+    }
+
     isCheckingSession.current = true
+    lastCheckTime.current = now
 
     try {
       console.log('🔍 Verifica sessione customer...')
@@ -61,35 +59,34 @@ export function CustomerAuthProvider({ children }) {
       if (error) {
         console.error('❌ Errore verifica sessione customer:', error)
         
-        // Gestisci errori refresh token
         if (error.message?.includes('refresh_token_not_found') || 
             error.message?.includes('Invalid Refresh Token')) {
-          console.error('❌ Refresh token not found, clearing customer session')
           await supabase.auth.signOut()
           setUser(null)
           setCustomerProfile(null)
           setSediCollegate([])
           setSedeAttiva(null)
-          setLoading(false)
-          isCheckingSession.current = false
-          return
+          profileLoadedRef.current = false
         }
-        
-        throw error
+        setLoading(false)
+        isCheckingSession.current = false
+        return
       }
       
       if (session?.user) {
         console.log('✅ Customer sessione attiva:', session.user.email)
         setUser(session.user)
         
-        // Ricarica profilo solo se non già caricato o se forzato
-        if (!customerProfile || force) {
+        // ✅ FIX: Carica profilo SOLO se non già caricato
+        if (!profileLoadedRef.current) {
           await loadCustomerProfile(session.user.id)
+          profileLoadedRef.current = true
         }
       } else {
         console.log('❌ Nessuna customer sessione attiva')
         setUser(null)
         setCustomerProfile(null)
+        profileLoadedRef.current = false
       }
     } catch (error) {
       console.error('❌ Errore verifica customer sessione:', error)
@@ -97,42 +94,9 @@ export function CustomerAuthProvider({ children }) {
       setLoading(false)
       isCheckingSession.current = false
     }
-  }, [customerProfile])
+  }, [])
 
-  // ✅ FIX PWA: Handler per visibilitychange
-  const handleVisibilityChange = useCallback(async () => {
-    if (document.visibilityState === 'visible') {
-      const now = Date.now()
-      const timeSinceLastCheck = now - lastVisibilityCheck.current
-      
-      // Evita check troppo frequenti (minimo 5 secondi tra un check e l'altro)
-      if (timeSinceLastCheck < 5000) {
-        console.log('⏳ Check recente, skip visibilitychange')
-        return
-      }
-      
-      lastVisibilityCheck.current = now
-      console.log('👁️ App tornata in foreground, ri-verifica sessione...')
-      
-      // Ri-verifica sessione
-      await checkSession(true)
-    }
-  }, [checkSession])
-
-  // ✅ FIX PWA: Handler per focus (backup per alcuni browser)
-  const handleFocus = useCallback(async () => {
-    const now = Date.now()
-    const timeSinceLastCheck = now - lastVisibilityCheck.current
-    
-    if (timeSinceLastCheck < 5000) {
-      return
-    }
-    
-    lastVisibilityCheck.current = now
-    console.log('🎯 Window focus, ri-verifica sessione...')
-    await checkSession(true)
-  }, [checkSession])
-
+  // Setup iniziale
   useEffect(() => {
     // Verifica sessione iniziale
     checkSession()
@@ -144,14 +108,17 @@ export function CustomerAuthProvider({ children }) {
         
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user)
-          await loadCustomerProfile(session.user.id)
+          if (!profileLoadedRef.current) {
+            await loadCustomerProfile(session.user.id)
+            profileLoadedRef.current = true
+          }
         } 
         else if (event === 'SIGNED_OUT') {
           setUser(null)
           setCustomerProfile(null)
-          // ✅ Reset multi-sede
           setSediCollegate([])
           setSedeAttiva(null)
+          profileLoadedRef.current = false
         }
         else if (event === 'TOKEN_REFRESHED') {
           console.log('✅ Customer token refreshed')
@@ -160,51 +127,50 @@ export function CustomerAuthProvider({ children }) {
           }
         }
         else if (event === 'INITIAL_SESSION') {
-          console.log('🔑 Customer Auth event: INITIAL_SESSION')
           if (session?.user) {
             setUser(session.user)
-            await loadCustomerProfile(session.user.id)
+            if (!profileLoadedRef.current) {
+              await loadCustomerProfile(session.user.id)
+              profileLoadedRef.current = true
+            }
           }
+          setLoading(false)
         }
       }
     )
 
-    // ✅ FIX PWA: Aggiungi listeners per visibilitychange e focus
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-    
-    // ✅ FIX PWA: Online/Offline handling
-    const handleOnline = () => {
-      console.log('🌐 Connessione ripristinata, ri-verifica sessione...')
-      checkSession(true)
+    // ✅ FIX: Visibility change semplificato - NO reload profilo
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ App tornata visibile')
+        // Solo forza fine loading, NON ricaricare profilo
+        if (loading) {
+          setLoading(false)
+        }
+      }
     }
-    window.addEventListener('online', handleOnline)
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // Timeout di sicurezza
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('⚠️ Timeout loading auth, forcing completion')
+        setLoading(false)
+      }
+    }, 8000)
 
     return () => {
       authListener?.subscription?.unsubscribe()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('online', handleOnline)
+      clearTimeout(timeout)
     }
-  }, [checkSession, handleVisibilityChange, handleFocus])
-
-  // ✅ FIX PWA: Timeout di sicurezza per evitare loading infinito
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn('⚠️ Timeout loading, forcing completion')
-        setLoading(false)
-      }
-    }, 10000) // 10 secondi max
-
-    return () => clearTimeout(timeout)
-  }, [loading])
+  }, [])
 
   async function loadCustomerProfile(userId) {
     try {
       console.log('📊 Caricamento profilo cliente:', userId)
       
-      // ✅ QUERY CORRETTA: Cerca in customer_portal_users con JOIN a clienti
       const { data: customerUser, error: userError } = await supabase
         .from('customer_portal_users')
         .select(`
@@ -216,9 +182,6 @@ export function CustomerAuthProvider({ children }) {
 
       if (userError) {
         console.error('❌ Profilo non trovato nel DB:', userError)
-        
-        // Se il profilo non esiste, potrebbe essere un nuovo utente
-        console.log('⚠️ Usando profilo virtuale temporaneo')
         setCustomerProfile({
           id: userId,
           _needsOnboarding: true,
@@ -233,9 +196,8 @@ export function CustomerAuthProvider({ children }) {
         return
       }
 
-      console.log('✅ Dati utente caricati:', customerUser)
+      console.log('✅ Dati utente caricati:', customerUser.cliente?.ragione_sociale)
       
-      // Verifica se ha accesso attivo
       if (!customerUser.attivo) {
         console.error('❌ Account cliente disattivato')
         setCustomerProfile(null)
@@ -243,17 +205,13 @@ export function CustomerAuthProvider({ children }) {
         return
       }
 
-      // 🔧 FIX: Appiattisce i dati del cliente per accesso diretto
       const profile = {
-        // Dati da customer_portal_users
         id: customerUser.id,
         cliente_id: customerUser.cliente_id,
         email: customerUser.email,
         attivo: customerUser.attivo,
         created_at: customerUser.created_at,
         updated_at: customerUser.updated_at,
-        
-        // 🎯 DATI APPIATTITI dalla tabella clienti
         ragione_sociale: customerUser.cliente?.ragione_sociale || '',
         partita_iva: customerUser.cliente?.partita_iva || '',
         codice_fiscale: customerUser.cliente?.codice_fiscale || '',
@@ -268,27 +226,19 @@ export function CustomerAuthProvider({ children }) {
         email_amministrazione: customerUser.cliente?.email_amministrazione || '',
         sito_web: customerUser.cliente?.sito_web || '',
         note: customerUser.cliente?.note || '',
-        
-        // Metadata
         onboarding_completato: customerUser.cliente?.onboarding_completato || false,
-        
-        // ✅ Mantieni anche l'oggetto cliente originale per retrocompatibilità
         cliente: customerUser.cliente
       }
 
       setCustomerProfile(profile)
-      console.log('✅ Profilo cliente appiattito e caricato:', profile)
 
-      // ✅ NUOVO: Carica sedi collegate via P.IVA
       if (customerUser.cliente?.partita_iva) {
         await loadSediCollegate(customerUser.cliente.partita_iva, customerUser.cliente_id)
       } else {
-        // Nessuna P.IVA, nessuna sede collegata
         setSediCollegate([])
         setSedeAttiva(null)
       }
       
-      // Verifica stato onboarding
       await checkOnboardingStatus(userId, customerUser.cliente_id)
 
     } catch (error) {
@@ -297,7 +247,6 @@ export function CustomerAuthProvider({ children }) {
     }
   }
 
-  // ✅ NUOVO: Carica tutte le sedi con stessa P.IVA
   async function loadSediCollegate(partitaIva, clienteIdPrincipale) {
     try {
       console.log('🏢 Ricerca sedi collegate per P.IVA:', partitaIva)
@@ -327,26 +276,32 @@ export function CustomerAuthProvider({ children }) {
         return
       }
 
-      console.log(`✅ Trovate ${sedi?.length || 0} sedi con P.IVA ${partitaIva}`)
+      console.log(`✅ Trovate ${sedi?.length || 0} sedi`)
 
       if (sedi && sedi.length > 0) {
-        // Formatta le sedi con info utili per il picker
         const sediFormattate = sedi.map(sede => ({
           ...sede,
-          // Label per il dropdown
           label: `${sede.citta || 'N/D'} - ${sede.indirizzo || sede.ragione_sociale}`,
-          // Flag se è la sede principale (quella collegata all'utente)
           isPrincipale: sede.id === clienteIdPrincipale
         }))
 
         setSediCollegate(sediFormattate)
 
-        // Imposta sede attiva = sede principale (o prima sede se non trovata)
-        const sedePrincipale = sediFormattate.find(s => s.isPrincipale) || sediFormattate[0]
-        setSedeAttiva(sedePrincipale)
+        // Ripristina sede da localStorage o usa principale
+        let sedeIniziale = sediFormattate.find(s => s.isPrincipale) || sediFormattate[0]
+        
+        if (typeof window !== 'undefined') {
+          const sedeIdSalvata = localStorage.getItem('sedeAttiva')
+          if (sedeIdSalvata) {
+            const sedeSalvata = sediFormattate.find(s => s.id === sedeIdSalvata)
+            if (sedeSalvata) {
+              sedeIniziale = sedeSalvata
+            }
+          }
+        }
 
-        console.log('🏢 Sedi caricate:', sediFormattate.map(s => s.codice_cliente))
-        console.log('📍 Sede attiva:', sedePrincipale?.codice_cliente)
+        setSedeAttiva(sedeIniziale)
+        console.log('📍 Sede attiva:', sedeIniziale?.codice_cliente)
       } else {
         setSediCollegate([])
         setSedeAttiva(null)
@@ -359,15 +314,13 @@ export function CustomerAuthProvider({ children }) {
     }
   }
 
-  // ✅ NUOVO: Cambia sede attiva
   function cambiaSedeAttiva(clienteId) {
     const nuovaSede = sediCollegate.find(s => s.id === clienteId)
     
     if (nuovaSede) {
-      console.log('🔄 Cambio sede attiva:', nuovaSede.codice_cliente, nuovaSede.citta)
+      console.log('🔄 Cambio sede attiva:', nuovaSede.codice_cliente)
       setSedeAttiva(nuovaSede)
       
-      // Salva preferenza in localStorage per persistenza
       if (typeof window !== 'undefined') {
         localStorage.setItem('sedeAttiva', clienteId)
       }
@@ -375,24 +328,8 @@ export function CustomerAuthProvider({ children }) {
       return true
     }
     
-    console.warn('⚠️ Sede non trovata:', clienteId)
     return false
   }
-
-  // ✅ NUOVO: Ripristina sede da localStorage all'avvio
-  useEffect(() => {
-    if (sediCollegate.length > 1 && typeof window !== 'undefined') {
-      const sedeIdSalvata = localStorage.getItem('sedeAttiva')
-      
-      if (sedeIdSalvata) {
-        const sedeSalvata = sediCollegate.find(s => s.id === sedeIdSalvata)
-        if (sedeSalvata && sedeSalvata.id !== sedeAttiva?.id) {
-          console.log('🔄 Ripristino sede da localStorage:', sedeSalvata.codice_cliente)
-          setSedeAttiva(sedeSalvata)
-        }
-      }
-    }
-  }, [sediCollegate])
 
   async function checkOnboardingStatus(userId, clienteId) {
     try {
@@ -408,7 +345,6 @@ export function CustomerAuthProvider({ children }) {
       }
 
       if (!data) {
-        console.log('⚠️ Onboarding status non trovato, necessario completare')
         setCustomerProfile(prev => ({ 
           ...prev, 
           _needsOnboarding: true,
@@ -417,14 +353,11 @@ export function CustomerAuthProvider({ children }) {
         return
       }
 
-      // Controlla se tutti gli step sono completati
       const isComplete = data.dati_aziendali_completati && 
                         data.referenti_completati && 
                         data.macchinari_completati &&
                         data.documenti_completati
 
-      console.log('📋 Onboarding status:', isComplete ? 'Completato' : 'Da completare')
-      
       setCustomerProfile(prev => ({ 
         ...prev, 
         _needsOnboarding: !isComplete,
@@ -437,13 +370,11 @@ export function CustomerAuthProvider({ children }) {
   }
 
   async function refreshProfile() {
-    if (!user?.id) {
-      console.warn('⚠️ Impossibile ricaricare profilo: cliente non loggato')
-      return
-    }
-    
+    if (!user?.id) return
     console.log('🔄 Ricaricamento profilo cliente...')
+    profileLoadedRef.current = false
     await loadCustomerProfile(user.id)
+    profileLoadedRef.current = true
   }
 
   async function signIn(email, password) {
@@ -455,16 +386,12 @@ export function CustomerAuthProvider({ children }) {
         password
       })
 
-      if (error) {
-        console.error('❌ Errore auth cliente:', error)
-        throw error
-      }
+      if (error) throw error
       
-      console.log('✅ Auth cliente successful:', data.user.email)
-      
-      // Carica profilo cliente
       if (data.user) {
+        profileLoadedRef.current = false
         await loadCustomerProfile(data.user.id)
+        profileLoadedRef.current = true
       }
       
       return { data, error: null }
@@ -476,25 +403,17 @@ export function CustomerAuthProvider({ children }) {
 
   async function signUp(email, password, customerData) {
     try {
-      console.log('📝 Registrazione nuovo cliente:', email)
-      
-      // 1. Crea utente auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            tipo_account: 'customer'
-          }
+          data: { tipo_account: 'customer' }
         }
       })
 
       if (authError) throw authError
 
-      // 2. Crea profilo cliente nel DB
       if (authData.user) {
-        console.log('👤 Creazione profilo cliente DB...')
-        
         const { error: dbError } = await supabase
           .from('customer_portal_users')
           .insert({
@@ -504,13 +423,11 @@ export function CustomerAuthProvider({ children }) {
             attivo: true
           })
         
-        if (dbError) {
-          console.error('❌ Errore creazione profilo cliente DB:', dbError)
-          throw dbError
-        }
+        if (dbError) throw dbError
         
-        console.log('✅ Profilo cliente DB creato')
+        profileLoadedRef.current = false
         await loadCustomerProfile(authData.user.id)
+        profileLoadedRef.current = true
       }
 
       return { data: authData, error: null }
@@ -528,11 +445,10 @@ export function CustomerAuthProvider({ children }) {
       
       setUser(null)
       setCustomerProfile(null)
-      // ✅ Reset multi-sede
       setSediCollegate([])
       setSedeAttiva(null)
+      profileLoadedRef.current = false
       
-      // Pulisci localStorage
       if (typeof window !== 'undefined') {
         localStorage.removeItem('sedeAttiva')
       }
@@ -551,32 +467,24 @@ export function CustomerAuthProvider({ children }) {
       if (error) throw error
       return { error: null }
     } catch (error) {
-      console.error('❌ Errore reset password cliente:', error)
       return { error }
     }
   }
 
   async function updatePassword(newPassword) {
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      })
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
       return { error: null }
     } catch (error) {
-      console.error('❌ Errore update password cliente:', error)
       return { error }
     }
   }
 
   async function updateProfile(updates) {
     try {
-      if (!customerProfile?.id) {
-        throw new Error('Nessun profilo cliente caricato')
-      }
+      if (!customerProfile?.id) throw new Error('Nessun profilo cliente')
 
-      console.log('📝 Aggiornamento profilo cliente...')
-      
       const { data, error } = await supabase
         .from('customer_portal_users')
         .update(updates)
@@ -586,27 +494,22 @@ export function CustomerAuthProvider({ children }) {
 
       if (error) throw error
 
-      console.log('✅ Profilo cliente aggiornato')
       setCustomerProfile(data)
       return { data, error: null }
     } catch (error) {
-      console.error('❌ Errore update profilo cliente:', error)
       return { data: null, error }
     }
   }
 
-  // Helper per verificare stato onboarding
   const needsOnboarding = customerProfile?._needsOnboarding === true
   const isActive = customerProfile?.attivo === true
-  
-  // ✅ NUOVO: Helper per multi-sede
   const isMultiSede = sediCollegate.length > 1
 
   const value = {
     user,
     customerProfile,
     loading,
-    authLoading: loading, // Alias per retrocompatibilità
+    authLoading: loading,
     signIn,
     signUp,
     signOut,
@@ -616,15 +519,10 @@ export function CustomerAuthProvider({ children }) {
     refreshProfile,
     needsOnboarding,
     isActive,
-    
-    // ✅ NUOVO: Esporta stati e funzioni multi-sede
     sediCollegate,
     sedeAttiva,
     cambiaSedeAttiva,
-    isMultiSede,
-    
-    // ✅ FIX PWA: Funzione per forzare ri-check sessione
-    recheckSession: () => checkSession(true)
+    isMultiSede
   }
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>
