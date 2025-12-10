@@ -433,17 +433,16 @@ export default function CustomerDashboard() {
                   Portale Assistenza Tecnica
                 </p>
               </div>
-              
-              {/* ✅ MULTI-SEDE: Selettore Sede */}
-              {isMultiSede && (
-                <SedePicker className="hidden md:block ml-4" />
-              )}
             </div>
 
-            {/* User menu */}
-            <div className="flex items-center gap-4">
+            {/* User menu + SedePicker */}
+            <div className="flex items-center gap-2 sm:gap-4">
+              {/* ✅ FIX: SedePicker ORA VISIBILE SU MOBILE */}
+              {isMultiSede && (
+                <SedePicker className="max-w-[130px] sm:max-w-[200px]" />
+              )}
               <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
                   {user?.email?.charAt(0).toUpperCase()}
                 </div>
                 <div>

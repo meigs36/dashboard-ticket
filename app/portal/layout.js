@@ -1,10 +1,10 @@
 // app/portal/layout.js
-// Layout Portale Clienti con supporto PWA - Next.js 16
-// NOTA: Non include <html> e <body> perché sono nel root layout
+// Layout Portale Clienti con supporto PWA e Dark Mode - Next.js 16
 
 import PWAPortalProvider from '@/components/portal/PWAPortalProvider'
 import PWAInstallPrompt from '@/components/portal/PWAInstallPrompt'
 import { CustomerAuthProvider } from '@/contexts/CustomerAuthContext'
+import { Providers } from '@/components/Providers'
 
 // Metadata - SOVRASCRIVE quello del root layout per /portal/*
 export const metadata = {
@@ -34,17 +34,21 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#2563EB',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#2563EB' },
+    { media: '(prefers-color-scheme: dark)', color: '#1e3a5f' },
+  ],
 }
 
 export default function PortalLayout({ children }) {
-  // NOTA: Non wrappare con <html> e <body> - sono già nel root layout!
   return (
-    <CustomerAuthProvider>
-      <PWAPortalProvider>
-        {children}
-        <PWAInstallPrompt />
-      </PWAPortalProvider>
-    </CustomerAuthProvider>
+    <Providers>
+      <CustomerAuthProvider>
+        <PWAPortalProvider>
+          {children}
+          <PWAInstallPrompt />
+        </PWAPortalProvider>
+      </CustomerAuthProvider>
+    </Providers>
   )
 }
