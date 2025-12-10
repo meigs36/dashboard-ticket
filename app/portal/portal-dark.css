@@ -10,6 +10,43 @@
    ogni singolo componente.
    =========================================== */
 
+/* ===== INPUT DATE FIX (iOS/Mobile) ===== */
+input[type="date"] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background-color: inherit;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Fix per iOS Safari - date picker */
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* Fix grid overflow su mobile */
+.grid {
+  overflow: hidden;
+}
+
+.grid > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Dark mode per date inputs */
+.dark input[type="date"] {
+  background-color: rgb(55 65 81) !important;
+  color: white !important;
+  border-color: rgb(75 85 99) !important;
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
 /* ===== BASE BACKGROUNDS ===== */
 .dark .min-h-screen.bg-gray-50,
 .dark .bg-gray-50 {
@@ -364,6 +401,22 @@
 
 /* Fallback ultra-aggressivo per qualsiasi bg-white rimasto */
 .dark [class*="bg-white"]:not(.btn):not(button) {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* ✅ FIX: Box firma digitale e consensi */
+.dark .bg-white.rounded-xl,
+.dark .bg-white.rounded-2xl,
+.dark .bg-white.rounded-lg,
+.dark .bg-white.shadow,
+.dark .bg-white.shadow-md,
+.dark .bg-white.shadow-lg,
+.dark .bg-white.shadow-xl {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Box con bordi arrotondati generici */
+.dark div[class*="bg-white"][class*="rounded"] {
   background-color: rgb(31 41 55) !important;
 }
 
