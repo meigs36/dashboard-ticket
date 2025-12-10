@@ -9,7 +9,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import NotificationDropdownAdvanced from '@/components/NotificationDropdownAdvanced'
 import { 
   Menu, X, Home, Users, HardDrive, Ticket, Bell, 
-  User, LogOut, Settings, Sun, Moon, ChevronDown,
+  User, LogOut, Settings, ChevronDown,
   BarChart3, FileText
 } from 'lucide-react'
 
@@ -19,7 +19,6 @@ export default function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const [theme, setTheme] = useState('light')
 
   const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -40,12 +39,6 @@ const allNavigation = [...navigation, ...adminNavigation]
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
-  }
-
-  function toggleTheme() {
-    const newTheme = theme === 'light' ? 'dark' : 'light'
-    setTheme(newTheme)
-    document.documentElement.classList.toggle('dark')
   }
 
   const isActive = (href) => {
@@ -98,17 +91,8 @@ const allNavigation = [...navigation, ...adminNavigation]
             </div>
           </div>
 
-          {/* Right Side: Theme, Notifications, Profile */}
+          {/* Right Side: Notifications, Profile */}
           <div className="flex items-center gap-2">
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              aria-label="Toggle theme"
-            >
-              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-            </button>
-
             {/* Notifications - AGGIORNATO CON userProfile */}
             <NotificationDropdownAdvanced userProfile={userProfile} />
 

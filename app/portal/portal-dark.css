@@ -465,3 +465,37 @@
 .dark .bg-clip-text {
   -webkit-text-fill-color: inherit;
 }
+
+/* ===== ONBOARDING PROGRESS BOX FIX ===== */
+/* Box con logo e "Step X di 5" */
+.dark .bg-white.shadow-lg.rounded-2xl,
+.dark .bg-white.shadow-xl.rounded-2xl,
+.dark .bg-white.shadow.rounded-2xl,
+.dark .bg-white.rounded-2xl.shadow,
+.dark .bg-white.rounded-2xl {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Fallback più aggressivo per qualsiasi bg-white */
+.dark [class*="bg-white"][class*="rounded"] {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Box specifico progress */
+.dark .bg-white.p-4,
+.dark .bg-white.p-5,
+.dark .bg-white.p-6,
+.dark .bg-white.p-8 {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Assicura che il testo nel box sia visibile */
+.dark .bg-white .text-gray-600,
+.dark .bg-white .text-gray-500 {
+  color: rgb(156 163 175) !important;
+}
+
+.dark .bg-white .text-gray-900,
+.dark .bg-white .text-gray-800 {
+  color: rgb(255 255 255) !important;
+}

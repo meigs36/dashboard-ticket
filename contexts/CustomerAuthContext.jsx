@@ -7,10 +7,15 @@
 // 3. ✅ Stato sedeAttiva per sede selezionata
 // 4. ✅ Funzione cambiaSedeAttiva() per switch sede
 // 5. ✅ isMultiSede helper per UI condizionale
+//
+// 🔧 MODIFICHE APPLICATE (10 Dic 2025):
+// 6. ✅ FIX PWA FREEZE: Listener visibilitychange per ripristino sessione
+// 7. ✅ Ri-verifica sessione quando app torna in foreground
+// 8. ✅ Timeout per evitare loading infinito
 
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -33,6 +38,100 @@ export function CustomerAuthProvider({ children }) {
   // ✅ NUOVO: Stati per gestione multi-sede
   const [sediCollegate, setSediCollegate] = useState([])
   const [sedeAttiva, setSedeAttiva] = useState(null)
+
+  // ✅ FIX PWA: Ref per evitare check multipli
+  const isCheckingSession = useRef(false)
+  const lastVisibilityCheck = useRef(0)
+
+  // ✅ FIX PWA: Funzione checkSession memorizzata
+  const checkSession = useCallback(async (force = false) => {
+    // Evita check multipli simultanei
+    if (isCheckingSession.current && !force) {
+      console.log('⏳ Check sessione già in corso, skip')
+      return
+    }
+
+    isCheckingSession.current = true
+
+    try {
+      console.log('🔍 Verifica sessione customer...')
+      
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('❌ Errore verifica sessione customer:', error)
+        
+        // Gestisci errori refresh token
+        if (error.message?.includes('refresh_token_not_found') || 
+            error.message?.includes('Invalid Refresh Token')) {
+          console.error('❌ Refresh token not found, clearing customer session')
+          await supabase.auth.signOut()
+          setUser(null)
+          setCustomerProfile(null)
+          setSediCollegate([])
+          setSedeAttiva(null)
+          setLoading(false)
+          isCheckingSession.current = false
+          return
+        }
+        
+        throw error
+      }
+      
+      if (session?.user) {
+        console.log('✅ Customer sessione attiva:', session.user.email)
+        setUser(session.user)
+        
+        // Ricarica profilo solo se non già caricato o se forzato
+        if (!customerProfile || force) {
+          await loadCustomerProfile(session.user.id)
+        }
+      } else {
+        console.log('❌ Nessuna customer sessione attiva')
+        setUser(null)
+        setCustomerProfile(null)
+      }
+    } catch (error) {
+      console.error('❌ Errore verifica customer sessione:', error)
+    } finally {
+      setLoading(false)
+      isCheckingSession.current = false
+    }
+  }, [customerProfile])
+
+  // ✅ FIX PWA: Handler per visibilitychange
+  const handleVisibilityChange = useCallback(async () => {
+    if (document.visibilityState === 'visible') {
+      const now = Date.now()
+      const timeSinceLastCheck = now - lastVisibilityCheck.current
+      
+      // Evita check troppo frequenti (minimo 5 secondi tra un check e l'altro)
+      if (timeSinceLastCheck < 5000) {
+        console.log('⏳ Check recente, skip visibilitychange')
+        return
+      }
+      
+      lastVisibilityCheck.current = now
+      console.log('👁️ App tornata in foreground, ri-verifica sessione...')
+      
+      // Ri-verifica sessione
+      await checkSession(true)
+    }
+  }, [checkSession])
+
+  // ✅ FIX PWA: Handler per focus (backup per alcuni browser)
+  const handleFocus = useCallback(async () => {
+    const now = Date.now()
+    const timeSinceLastCheck = now - lastVisibilityCheck.current
+    
+    if (timeSinceLastCheck < 5000) {
+      return
+    }
+    
+    lastVisibilityCheck.current = now
+    console.log('🎯 Window focus, ri-verifica sessione...')
+    await checkSession(true)
+  }, [checkSession])
 
   useEffect(() => {
     // Verifica sessione iniziale
@@ -70,47 +169,36 @@ export function CustomerAuthProvider({ children }) {
       }
     )
 
+    // ✅ FIX PWA: Aggiungi listeners per visibilitychange e focus
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    // ✅ FIX PWA: Online/Offline handling
+    const handleOnline = () => {
+      console.log('🌐 Connessione ripristinata, ri-verifica sessione...')
+      checkSession(true)
+    }
+    window.addEventListener('online', handleOnline)
+
     return () => {
       authListener?.subscription?.unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('online', handleOnline)
     }
-  }, [])
+  }, [checkSession, handleVisibilityChange, handleFocus])
 
-  async function checkSession() {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('❌ Errore verifica sessione customer:', error)
-        
-        // Gestisci errori refresh token
-        if (error.message?.includes('refresh_token_not_found') || 
-            error.message?.includes('Invalid Refresh Token')) {
-          console.error('❌ Refresh token not found, clearing customer session')
-          await supabase.auth.signOut()
-          setUser(null)
-          setCustomerProfile(null)
-          setSediCollegate([])
-          setSedeAttiva(null)
-          setLoading(false)
-          return
-        }
-        
-        throw error
+  // ✅ FIX PWA: Timeout di sicurezza per evitare loading infinito
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('⚠️ Timeout loading, forcing completion')
+        setLoading(false)
       }
-      
-      if (session?.user) {
-        console.log('✅ Customer sessione attiva:', session.user.email)
-        setUser(session.user)
-        await loadCustomerProfile(session.user.id)
-      } else {
-        console.log('❌ Nessuna customer sessione attiva')
-      }
-    } catch (error) {
-      console.error('❌ Errore verifica customer sessione:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    }, 10000) // 10 secondi max
+
+    return () => clearTimeout(timeout)
+  }, [loading])
 
   async function loadCustomerProfile(userId) {
     try {
@@ -265,7 +353,7 @@ export function CustomerAuthProvider({ children }) {
       }
 
     } catch (error) {
-      console.error('❌ Errore caricamento sedi collegate:', error)
+      console.error('❌ Errore caricamento sedi:', error)
       setSediCollegate([])
       setSedeAttiva(null)
     }
@@ -518,6 +606,7 @@ export function CustomerAuthProvider({ children }) {
     user,
     customerProfile,
     loading,
+    authLoading: loading, // Alias per retrocompatibilità
     signIn,
     signUp,
     signOut,
@@ -532,7 +621,10 @@ export function CustomerAuthProvider({ children }) {
     sediCollegate,
     sedeAttiva,
     cambiaSedeAttiva,
-    isMultiSede
+    isMultiSede,
+    
+    // ✅ FIX PWA: Funzione per forzare ri-check sessione
+    recheckSession: () => checkSession(true)
   }
 
   return <CustomerAuthContext.Provider value={value}>{children}</CustomerAuthContext.Provider>
