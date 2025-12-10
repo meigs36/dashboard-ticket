@@ -5,7 +5,7 @@
 import { CustomerAuthProvider } from '@/contexts/CustomerAuthContext'
 import { Providers } from '@/components/Providers'
 import PWAPortalProvider from '@/components/portal/PWAPortalProvider'
-import './portal-dark.css'  // ✅ DARK MODE CSS
+// import './portal-dark.css'  // ✅ DARK MODE CSS
 
 export const metadata = {
   title: 'Portale Clienti - ODONTO SERVICE',
