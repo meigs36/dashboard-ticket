@@ -429,9 +429,14 @@ export default function CustomerDashboard() {
     )
   }
 
-  // ✅ FIX: Se non c'è user, redirect
+  // ✅ FIX: Se non c'è user, redirect (in useEffect per evitare errore)
+  useEffect(() => {
+    if (!user && !loading) {
+      router.push('/portal')
+    }
+  }, [user, loading, router])
+
   if (!user) {
-    router.push('/portal')
     return null
   }
 
