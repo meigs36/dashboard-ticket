@@ -308,3 +308,160 @@
 .dark .ring-offset-2 {
   --tw-ring-offset-color: rgb(17 24 39) !important;
 }
+
+/* ===== ONBOARDING SPECIFIC ===== */
+
+/* Main background gradient override */
+.dark .bg-gradient-to-br.from-blue-50,
+.dark .bg-gradient-to-br.from-gray-50,
+.dark .from-blue-50,
+.dark .from-gray-50 {
+  --tw-gradient-from: rgb(17 24 39) !important;
+  --tw-gradient-to: rgb(31 41 55) !important;
+  background: linear-gradient(to bottom right, rgb(17 24 39), rgb(31 41 55)) !important;
+}
+
+/* Info cards in onboarding */
+.dark .border-l-4.border-blue-500,
+.dark .border-l-4.border-green-500,
+.dark .border-l-4.border-purple-500 {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Light gradient cards */
+.dark .bg-gradient-to-r.from-blue-50,
+.dark .bg-gradient-to-br.from-blue-50 {
+  background: linear-gradient(to right, rgba(30, 64, 175, 0.2), rgba(30, 64, 175, 0.1)) !important;
+}
+
+.dark .bg-gradient-to-r.from-green-50,
+.dark .bg-gradient-to-br.from-green-50 {
+  background: linear-gradient(to right, rgba(22, 101, 52, 0.2), rgba(22, 101, 52, 0.1)) !important;
+}
+
+.dark .bg-gradient-to-r.from-purple-50,
+.dark .bg-gradient-to-br.from-purple-50 {
+  background: linear-gradient(to right, rgba(107, 33, 168, 0.2), rgba(107, 33, 168, 0.1)) !important;
+}
+
+/* White cards with rounded corners */
+.dark div.bg-white.rounded-2xl,
+.dark div.bg-white.rounded-xl,
+.dark div.bg-white.rounded-lg {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Onboarding step cards */
+.dark .bg-white.shadow-lg,
+.dark .bg-white.shadow-xl,
+.dark .bg-white.shadow-2xl {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Progress bar background */
+.dark .bg-gray-200 {
+  background-color: rgb(55 65 81) !important;
+}
+
+/* Alert/Info boxes with borders */
+.dark .border.border-blue-200,
+.dark .border.border-green-200,
+.dark .border.border-purple-200,
+.dark .border.border-amber-200 {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.dark .border-green-200 {
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.dark .border-purple-200 {
+  border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+/* Text colors in info boxes */
+.dark .text-blue-700 {
+  color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+.dark .text-green-700 {
+  color: rgb(134 239 172) !important; /* green-300 */
+}
+
+.dark .text-purple-700 {
+  color: rgb(216 180 254) !important; /* purple-300 */
+}
+
+.dark .text-amber-700 {
+  color: rgb(252 211 77) !important; /* amber-300 */
+}
+
+/* Stepper inactive steps */
+.dark .bg-gray-300 {
+  background-color: rgb(75 85 99) !important;
+}
+
+.dark .text-gray-400 {
+  color: rgb(156 163 175) !important;
+}
+
+/* Card sections */
+.dark section.bg-white,
+.dark article.bg-white,
+.dark aside.bg-white {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Any remaining white backgrounds */
+.dark [class*="bg-white"] {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Light colored backgrounds in cards */
+.dark .bg-blue-50\/50,
+.dark .bg-green-50\/50,
+.dark .bg-purple-50\/50 {
+  background-color: rgba(30, 64, 175, 0.15) !important;
+}
+
+/* Form labels and helper text */
+.dark label {
+  color: rgb(209 213 219) !important;
+}
+
+/* Placeholder styling */
+.dark ::placeholder {
+  color: rgb(107 114 128) !important;
+}
+
+/* Select dropdowns */
+.dark select option {
+  background-color: rgb(31 41 55) !important;
+  color: white !important;
+}
+
+/* Checkbox and radio backgrounds */
+.dark input[type="checkbox"],
+.dark input[type="radio"] {
+  background-color: rgb(55 65 81) !important;
+}
+
+/* File upload areas */
+.dark .border-dashed {
+  border-color: rgb(75 85 99) !important;
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Toast notifications - keep readable */
+.dark .Toaster {
+  --toast-bg: rgb(31 41 55) !important;
+}
+
+/* Gradient text fix */
+.dark .bg-clip-text {
+  -webkit-text-fill-color: inherit;
+}
