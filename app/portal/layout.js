@@ -1,25 +1,25 @@
 // app/portal/layout.js
-// Layout Portale Clienti con supporto PWA e Dark Mode - Next.js 16
+// Layout Portale Clienti - CON DARK MODE
+// ✅ Importa portal-dark.css per dark mode automatico
 
-import PWAPortalProvider from '@/components/portal/PWAPortalProvider'
-import PWAInstallPrompt from '@/components/portal/PWAInstallPrompt'
 import { CustomerAuthProvider } from '@/contexts/CustomerAuthContext'
 import { Providers } from '@/components/Providers'
+import PWAPortalProvider from '@/components/portal/PWAPortalProvider'
+import './portal-dark.css'  // ✅ DARK MODE CSS
 
-// Metadata - SOVRASCRIVE quello del root layout per /portal/*
 export const metadata = {
-  title: 'ODONTO SERVICE - Portale Clienti',
-  description: 'Portale Clienti per la gestione dell\'assistenza tecnica odontoiatrica',
+  title: 'Portale Clienti - ODONTO SERVICE',
+  description: 'Portale clienti per assistenza tecnica odontoiatrica. Gestisci ticket, contratti e macchinari.',
   manifest: '/manifest-portal.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'OdontoService Clienti',
+    title: 'OS Portale',
   },
   icons: {
     icon: [
-      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
-      { url: '/web-app-manifest-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
     ],
     apple: [
       { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
@@ -27,13 +27,11 @@ export const metadata = {
   },
 }
 
-// Viewport separato (Next.js 16)
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#2563EB' },
     { media: '(prefers-color-scheme: dark)', color: '#1e3a5f' },
@@ -46,7 +44,6 @@ export default function PortalLayout({ children }) {
       <CustomerAuthProvider>
         <PWAPortalProvider>
           {children}
-          <PWAInstallPrompt />
         </PWAPortalProvider>
       </CustomerAuthProvider>
     </Providers>

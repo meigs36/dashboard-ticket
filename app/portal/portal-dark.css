@@ -1,0 +1,310 @@
+/* ===========================================
+   PORTAL DARK MODE OVERRIDE
+   File: app/portal/portal-dark.css
+   
+   Importa questo file nel layout del portale:
+   import './portal-dark.css'
+   
+   Questo applica automaticamente dark mode a tutti
+   gli elementi comuni del portale senza modificare
+   ogni singolo componente.
+   =========================================== */
+
+/* ===== BASE BACKGROUNDS ===== */
+.dark .min-h-screen.bg-gray-50,
+.dark .bg-gray-50 {
+  background-color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+.dark .bg-white {
+  background-color: rgb(31 41 55) !important; /* gray-800 */
+}
+
+.dark .bg-gray-100 {
+  background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* ===== TEXT COLORS ===== */
+.dark .text-gray-900 {
+  color: rgb(255 255 255) !important; /* white */
+}
+
+.dark .text-gray-800 {
+  color: rgb(243 244 246) !important; /* gray-100 */
+}
+
+.dark .text-gray-700 {
+  color: rgb(229 231 235) !important; /* gray-200 */
+}
+
+.dark .text-gray-600 {
+  color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.dark .text-gray-500 {
+  color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* ===== BORDERS ===== */
+.dark .border-gray-200 {
+  border-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .border-gray-300 {
+  border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.dark .border-t.border-gray-200,
+.dark .border-b.border-gray-200 {
+  border-color: rgb(55 65 81) !important;
+}
+
+/* ===== SHADOWS FOR DARK MODE ===== */
+.dark .shadow-sm,
+.dark .shadow,
+.dark .shadow-md,
+.dark .shadow-lg,
+.dark .shadow-xl,
+.dark .shadow-2xl {
+  --tw-shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+/* ===== HOVER STATES ===== */
+.dark .hover\:bg-gray-50:hover {
+  background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* ===== CARDS & CONTAINERS ===== */
+.dark .rounded-xl.bg-white,
+.dark .rounded-2xl.bg-white,
+.dark .rounded-lg.bg-white {
+  background-color: rgb(31 41 55) !important;
+  border-color: rgb(55 65 81) !important;
+}
+
+/* ===== LIGHT BACKGROUNDS (e.g., bg-blue-50, bg-green-50) ===== */
+.dark .bg-blue-50 {
+  background-color: rgba(30, 64, 175, 0.2) !important; /* blue-800/20 */
+}
+
+.dark .bg-green-50 {
+  background-color: rgba(22, 101, 52, 0.2) !important; /* green-800/20 */
+}
+
+.dark .bg-red-50 {
+  background-color: rgba(153, 27, 27, 0.2) !important; /* red-800/20 */
+}
+
+.dark .bg-amber-50,
+.dark .bg-yellow-50 {
+  background-color: rgba(146, 64, 14, 0.2) !important; /* amber-800/20 */
+}
+
+.dark .bg-purple-50 {
+  background-color: rgba(107, 33, 168, 0.2) !important; /* purple-800/20 */
+}
+
+.dark .bg-orange-50 {
+  background-color: rgba(154, 52, 18, 0.2) !important; /* orange-800/20 */
+}
+
+.dark .bg-emerald-50,
+.dark .bg-teal-50 {
+  background-color: rgba(6, 95, 70, 0.2) !important; /* emerald-800/20 */
+}
+
+.dark .bg-gray-50 {
+  background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* ===== ICON BACKGROUNDS ===== */
+.dark .bg-blue-100 {
+  background-color: rgba(30, 64, 175, 0.3) !important;
+}
+
+.dark .bg-green-100 {
+  background-color: rgba(22, 101, 52, 0.3) !important;
+}
+
+.dark .bg-red-100 {
+  background-color: rgba(153, 27, 27, 0.3) !important;
+}
+
+.dark .bg-amber-100,
+.dark .bg-yellow-100 {
+  background-color: rgba(146, 64, 14, 0.3) !important;
+}
+
+.dark .bg-purple-100 {
+  background-color: rgba(107, 33, 168, 0.3) !important;
+}
+
+.dark .bg-orange-100 {
+  background-color: rgba(154, 52, 18, 0.3) !important;
+}
+
+.dark .bg-emerald-100,
+.dark .bg-teal-100 {
+  background-color: rgba(6, 95, 70, 0.3) !important;
+}
+
+/* ===== INPUT FIELDS ===== */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: rgb(55 65 81) !important; /* gray-700 */
+  border-color: rgb(75 85 99) !important; /* gray-600 */
+  color: white !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: rgb(59 130 246) !important; /* blue-500 */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* ===== MODALS ===== */
+.dark .bg-black\/60 {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+/* ===== HEADER & STICKY ELEMENTS ===== */
+.dark header.bg-white,
+.dark .sticky.bg-white {
+  background-color: rgb(31 41 55) !important;
+}
+
+.dark header.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ===== INFO BOXES ===== */
+.dark .bg-blue-50.border-blue-200 {
+  background-color: rgba(30, 64, 175, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.dark .text-blue-900 {
+  color: rgb(191 219 254) !important; /* blue-200 */
+}
+
+.dark .text-blue-800 {
+  color: rgb(147 197 253) !important; /* blue-300 */
+}
+
+/* ===== BADGES (keep colored) ===== */
+/* These are intentionally kept with their original colors */
+
+/* ===== FOOTER ===== */
+.dark footer.bg-gray-900 {
+  background-color: rgb(3 7 18) !important; /* gray-950 */
+}
+
+/* ===== DIVIDERS ===== */
+.dark .divide-gray-200 > * + * {
+  border-color: rgb(55 65 81) !important;
+}
+
+.dark hr,
+.dark .border-t,
+.dark .border-b {
+  border-color: rgb(55 65 81) !important;
+}
+
+/* ===== DROPDOWN MENUS ===== */
+.dark [role="menu"],
+.dark [role="listbox"] {
+  background-color: rgb(31 41 55) !important;
+  border-color: rgb(55 65 81) !important;
+}
+
+.dark [role="menuitem"]:hover,
+.dark [role="option"]:hover {
+  background-color: rgb(55 65 81) !important;
+}
+
+/* ===== SCROLLBAR ===== */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgb(31 41 55);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgb(75 85 99);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgb(107 114 128);
+}
+
+/* ===== GRADIENT BACKGROUNDS (keep as-is) ===== */
+/* Hero gradients like bg-gradient-to-r from-blue-600 to-indigo-700 
+   should remain colorful even in dark mode */
+
+/* ===== BACKDROP BLUR ===== */
+.dark .backdrop-blur-md,
+.dark .backdrop-blur-sm {
+  backdrop-filter: blur(12px);
+}
+
+.dark .bg-white\/90 {
+  background-color: rgba(31, 41, 55, 0.95) !important;
+}
+
+.dark .bg-white\/80 {
+  background-color: rgba(31, 41, 55, 0.9) !important;
+}
+
+/* ===== TABLES ===== */
+.dark table {
+  border-color: rgb(55 65 81) !important;
+}
+
+.dark th {
+  background-color: rgb(55 65 81) !important;
+  color: rgb(229 231 235) !important;
+}
+
+.dark td {
+  border-color: rgb(55 65 81) !important;
+}
+
+.dark tr:hover {
+  background-color: rgba(55, 65, 81, 0.5) !important;
+}
+
+/* ===== SPECIFIC PORTAL OVERRIDES ===== */
+
+/* Login form */
+.dark #login-form {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* KPI Cards */
+.dark button.bg-white.rounded-xl {
+  background-color: rgb(31 41 55) !important;
+}
+
+.dark button.bg-white.rounded-xl:hover {
+  background-color: rgb(55 65 81) !important;
+}
+
+/* Ring offset for selected cards */
+.dark .ring-offset-2 {
+  --tw-ring-offset-color: rgb(17 24 39) !important;
+}
