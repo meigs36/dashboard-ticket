@@ -311,6 +311,43 @@
 
 /* ===== ONBOARDING SPECIFIC ===== */
 
+/* ✅ FIX: Override TOTALE del gradiente onboarding */
+.dark .from-blue-50,
+.dark .via-white,
+.dark .to-blue-100,
+.dark .from-green-50,
+.dark .to-green-100 {
+  --tw-gradient-from: rgb(17 24 39) !important;
+  --tw-gradient-via: rgb(31 41 55) !important;
+  --tw-gradient-to: rgb(17 24 39) !important;
+}
+
+/* Forza il gradiente scuro su min-h-screen */
+.dark .min-h-screen.bg-gradient-to-br {
+  background: linear-gradient(to bottom right, rgb(17 24 39), rgb(31 41 55), rgb(17 24 39)) !important;
+}
+
+/* ✅ FIX: Gradiente principale onboarding */
+.dark .bg-gradient-to-br.from-blue-50.via-white.to-blue-100,
+.dark .min-h-screen.bg-gradient-to-br.from-blue-50 {
+  background: linear-gradient(to bottom right, rgb(17 24 39), rgb(31 41 55), rgb(17 24 39)) !important;
+}
+
+.dark .bg-gradient-to-br.from-green-50.via-white.to-green-100,
+.dark .min-h-screen.bg-gradient-to-br.from-green-50 {
+  background: linear-gradient(to bottom right, rgb(17 24 39), rgb(31 41 55), rgb(17 24 39)) !important;
+}
+
+/* Header trasparente onboarding */
+.dark .bg-white\/80,
+.dark [class*="bg-white/80"] {
+  background-color: rgba(31, 41, 55, 0.9) !important;
+}
+
+.dark header.bg-white\/80 {
+  background-color: rgba(31, 41, 55, 0.9) !important;
+}
+
 /* ✅ FIX: Box progress con logo - REGOLA AGGRESSIVA */
 .dark .bg-white.shadow,
 .dark .bg-white.shadow-sm,
