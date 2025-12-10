@@ -311,6 +311,25 @@
 
 /* ===== ONBOARDING SPECIFIC ===== */
 
+/* ✅ FIX: Box progress con logo - REGOLA AGGRESSIVA */
+.dark .bg-white.shadow,
+.dark .bg-white.shadow-sm,
+.dark .bg-white.shadow-md,
+.dark .bg-white.p-4,
+.dark .bg-white.p-5,
+.dark .bg-white.p-6,
+.dark .bg-white.p-8,
+.dark .shadow.bg-white,
+.dark .shadow-sm.bg-white,
+.dark .shadow-md.bg-white {
+  background-color: rgb(31 41 55) !important;
+}
+
+/* Fallback ultra-aggressivo per qualsiasi bg-white rimasto */
+.dark [class*="bg-white"]:not(.btn):not(button) {
+  background-color: rgb(31 41 55) !important;
+}
+
 /* Main background gradient override */
 .dark .bg-gradient-to-br.from-blue-50,
 .dark .bg-gradient-to-br.from-gray-50,
