@@ -34,7 +34,7 @@ export async function POST(request) {
       inviaEmail 
     } = body
 
-    console.log('Richiesta creazione accesso:', { clienteId, email, nome })
+    console.log('📝 Richiesta creazione accesso:', { clienteId, email, nome })
 
     // Validazione
     if (!clienteId || !email || !password) {
@@ -45,16 +45,17 @@ export async function POST(request) {
     }
 
     // Verifica che il cliente esista
+    console.log('🔍 Cerco cliente con ID:', clienteId)
     const { data: cliente, error: clienteError } = await supabaseAdmin
       .from('clienti')
       .select('id, ragione_sociale, codice_cliente')
       .eq('id', clienteId)
       .single()
 
-    console.log('Risultato ricerca cliente:', { cliente, error: clienteError?.message })
+    console.log('📋 Risultato ricerca cliente:', { cliente, error: clienteError?.message })
 
     if (clienteError) {
-      console.error('Errore query cliente:', clienteError)
+      console.error('❌ Errore query cliente:', clienteError)
       return NextResponse.json(
         { error: `Errore ricerca cliente: ${clienteError.message}` },
         { status: 404 }
@@ -96,7 +97,7 @@ export async function POST(request) {
     })
 
     if (authError) {
-      console.error('Errore creazione auth:', authError)
+      console.error('❌ Errore creazione auth:', authError)
       return NextResponse.json(
         { error: `Errore creazione utente: ${authError.message}` },
         { status: 500 }
@@ -120,7 +121,7 @@ export async function POST(request) {
       })
 
     if (dbError) {
-      console.error('Errore inserimento DB:', dbError)
+      console.error('❌ Errore inserimento DB:', dbError)
       // Rollback: elimina utente auth creato
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
       return NextResponse.json(
@@ -138,7 +139,7 @@ export async function POST(request) {
           user_id: authData.user.id
         })
     } catch (e) {
-      console.log('Tabella onboarding non disponibile, skip')
+      console.log('ℹ️ Tabella onboarding non disponibile, skip')
     }
 
     // 4. Log accesso (opzionale)
@@ -151,12 +152,13 @@ export async function POST(request) {
           success: true
         })
     } catch (e) {
-      console.log('Tabella log non disponibile, skip')
+      console.log('ℹ️ Tabella log non disponibile, skip')
     }
 
     // 5. Invia email di benvenuto (se richiesto e configurato)
     if (inviaEmail && process.env.N8N_WEBHOOK_WELCOME_EMAIL) {
       try {
+        console.log('📧 Invio email benvenuto a:', email)
         await fetch(process.env.N8N_WEBHOOK_WELCOME_EMAIL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -165,13 +167,16 @@ export async function POST(request) {
             nome: nome || 'Cliente',
             ragione_sociale: cliente.ragione_sociale,
             password: password,
-            portal_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.example.com'}/portal`
+            portal_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://gestionale.odonto-service.it'}/portal`
           })
         })
+        console.log('✅ Email benvenuto inviata')
       } catch (emailError) {
-        console.error('Errore invio email:', emailError)
+        console.error('⚠️ Errore invio email:', emailError)
       }
     }
+
+    console.log('✅ Accesso creato con successo per:', email)
 
     return NextResponse.json({
       success: true,
@@ -182,7 +187,7 @@ export async function POST(request) {
     })
 
   } catch (error) {
-    console.error('Errore generale:', error)
+    console.error('❌ Errore generale:', error)
     return NextResponse.json(
       { error: error.message || 'Errore interno del server' },
       { status: 500 }
@@ -217,7 +222,7 @@ export async function GET(request) {
     return NextResponse.json({ data })
 
   } catch (error) {
-    console.error('Errore GET:', error)
+    console.error('❌ Errore GET:', error)
     return NextResponse.json(
       { error: 'Errore recupero dati' },
       { status: 500 }
