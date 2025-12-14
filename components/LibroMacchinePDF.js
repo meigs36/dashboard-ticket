@@ -82,17 +82,22 @@ export default function LibroMacchinePDF({
       const greenColor = [34, 197, 94]
       const redColor = [239, 68, 68]
 
-      // Info cliente per header
-      const clienteRagioneSociale = data.cliente.ragione_sociale || 'N/D'
+      // Info cliente per header - normalizza testo
+      const normalizeHeaderText = (text) => {
+        if (!text) return ''
+        return text.toString().replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()
+      }
+      
+      const clienteRagioneSociale = normalizeHeaderText(data.cliente.ragione_sociale) || 'N/D'
       const clienteIndirizzo = [
         data.cliente.indirizzo,
         data.cliente.cap,
         data.cliente.citta,
         data.cliente.provincia ? `(${data.cliente.provincia})` : ''
-      ].filter(Boolean).join(' ') || 'N/D'
+      ].filter(Boolean).map(s => normalizeHeaderText(s)).join(' ') || 'N/D'
       
       // SEDE: usa la prop sedeNome, oppure estrai la città dal cliente
-      const sedeLabel = sedeNome || data.cliente.citta || ''
+      const sedeLabel = normalizeHeaderText(sedeNome) || normalizeHeaderText(data.cliente.citta) || ''
 
       // Funzione per disegnare l'header
       const drawHeader = () => {
@@ -154,7 +159,7 @@ export default function LibroMacchinePDF({
         // Nome cliente in BLU - gestisce nomi lunghi
         doc.setTextColor(...primaryColor)
         doc.setFont('helvetica', 'bold')
-        const maxWidth = pageWidth - marginX - 50
+        const maxWidth = pageWidth - marginX - 35  // Più spazio (era -50)
         const clienteWidth = doc.getTextWidth(clienteRagioneSociale)
         
         if (clienteWidth > maxWidth) {
@@ -229,7 +234,7 @@ export default function LibroMacchinePDF({
 
       const hasSede = sedeLabel && sedeLabel !== clienteRagioneSociale
       const clienteTextWidth = doc.getTextWidth(clienteRagioneSociale)
-      const maxClienteWidth = pageWidth - marginX - 50
+      const maxClienteWidth = pageWidth - marginX - 35  // Allineato con drawHeader
       const hasLongName = clienteTextWidth > maxClienteWidth
       
       // Calcola startY dinamico in base al contenuto header

@@ -51,7 +51,6 @@ export async function GET(request) {
       .from('macchinari')
       .select('*')
       .eq('id_cliente', clienteId)
-      .order('numero_libro', { ascending: true, nullsFirst: false })
 
     if (macchinariError) {
       console.error('Errore query macchinari:', macchinariError)
@@ -60,6 +59,13 @@ export async function GET(request) {
         { status: 500 }
       )
     }
+
+    // ✅ Ordina numericamente per numero_libro
+    const macchinariOrdinati = (macchinari || []).sort((a, b) => {
+      const numA = parseInt(a.numero_libro) || 0
+      const numB = parseInt(b.numero_libro) || 0
+      return numA - numB
+    })
 
     // Prepara dati per il PDF
     const pdfData = {
@@ -74,7 +80,7 @@ export async function GET(request) {
         nome: cliente.ragione_sociale,
         indirizzo: `${cliente.indirizzo || ''}, ${cliente.citta || ''}`
       },
-      macchinari: macchinari.map((m, index) => ({
+      macchinari: macchinariOrdinati.map((m, index) => ({
         num_libro_macchina: m.numero_libro || index + 1,
         tipo_apparecchiatura: m.tipo_macchinario || '',
         marca: m.marca || '',
