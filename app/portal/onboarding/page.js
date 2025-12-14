@@ -362,7 +362,7 @@ export default function OnboardingPage() {
               {preloadedData._numeroMacchinari > 0 && (
                 <li className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 bg-green-600 rounded-full" />
-                  <span>{preloadedData._numeroMacchinari} macchinario{preloadedData._numeroMacchinari > 1 ? 'i' : ''} caricato</span>
+                  <span>{preloadedData._numeroMacchinari} {preloadedData._numeroMacchinari > 1 ? 'macchinari caricati' : 'macchinario caricato'}</span>
                 </li>
               )}
             </ul>
