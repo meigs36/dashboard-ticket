@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation'
 import TicketActionsModal from '@/components/TicketActionsModal'
 import ContrattoModal from '@/components/ContrattoModal'
 import InfrastrutturaForm from '@/components/InfrastrutturaForm'
+import LibroMacchinePDF from '@/components/LibroMacchinePDF'
 
 export default function ClienteDettaglio() {
   const params = useParams()
@@ -422,10 +423,26 @@ if (contrattiError) {
           <div className="bg-white dark:bg-gray-800 rounded-b-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             {/* Tab Macchinari */}
             {activeTab === 'macchinari' && (
-              <>
-                {macchinari.length > 0 ? (
+  <>
+    {/* Header con pulsante Libro Macchine */}
+    {macchinari.length > 0 && (
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {macchinari.length} macchinari installati
+        </p>
+        <LibroMacchinePDF 
+          clienteId={cliente?.id}
+          clienteNome={cliente?.ragione_sociale}
+          sedeNome={cliente?.citta}
+        />
+      </div>
+    )}
+    
+    {macchinari.length > 0 ? (
+            
+            
                   <div className="space-y-4">
-                    {macchinari.map((macchinario) => (
+                     {macchinari.map((macchinario) => (
                       <div 
                         key={macchinario.id}
                         className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"

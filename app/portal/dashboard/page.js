@@ -38,6 +38,7 @@ import {
   ChevronRight, ArrowLeft, Receipt, Euro, Calendar,
   CreditCard, FileCheck, X, AlertTriangle, Settings
 } from 'lucide-react'
+import LibroMacchinePDF from '@/components/LibroMacchinePDF'
 
 export default function CustomerDashboard() {
   const router = useRouter()
@@ -1058,6 +1059,12 @@ export default function CustomerDashboard() {
                     </p>
                   </div>
                 </div>
+                
+                {/* Pulsante Stampa Libro Macchine */}
+                <LibroMacchinePDF 
+                  clienteId={sedeAttiva?.id || customerProfile?.cliente_id}
+                  clienteNome={sedeAttiva?.ragione_sociale || dashboardData.cliente?.ragione_sociale}
+                />
               </div>
 
               {macchinari.length > 0 ? (
