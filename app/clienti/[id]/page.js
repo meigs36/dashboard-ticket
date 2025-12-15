@@ -1041,7 +1041,7 @@ export default function CustomerDashboard() {
     Sostituisce il blocco: {activeSection === 'macchinari' && (...)}
     ============================================ */}
 
-{activeSection === 'macchinari' && (
+          {activeSection === 'macchinari' && (
   <div className="bg-white rounded-xl shadow-sm p-6">
     {(() => {
       // Lista ubicazioni uniche
@@ -1327,8 +1327,9 @@ export default function CustomerDashboard() {
       )
     })()}
   </div>
+)}
 
-{/* FATTURE SECTION */}
+          {/* FATTURE SECTION */}
           {activeSection === 'fatture' && (
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
