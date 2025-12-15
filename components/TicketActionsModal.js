@@ -20,7 +20,9 @@ import {
   Users,
   ChevronDown,
   Check,
-  Loader2
+  Loader2,
+  MapPin,
+  Wrench
 } from 'lucide-react'
 import InterventiTab from './InterventiTab'
 
@@ -60,10 +62,14 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
   
   // Stato per cliente
   const [cliente, setCliente] = useState(null)
+  
+  // ✅ Stato per macchinario (sede e ubicazione)
+  const [macchinario, setMacchinario] = useState(null)
 
   useEffect(() => {
     loadTecnici()
     loadCliente()
+    loadMacchinario()  // ✅ Carica dati macchinario
     if (activeTab === 'note') {
       loadNote()
     }
@@ -79,14 +85,14 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
     }
   }, [tipoNota, ticket.id_cliente])
 
-  // Carica dati cliente
+  // Carica dati cliente (inclusi dati sede)
   async function loadCliente() {
     if (!ticket.id_cliente) return
     
     try {
       const { data, error } = await supabase
         .from('clienti')
-        .select('id, ragione_sociale, email_principale, email_pec, email_amministrazione')
+        .select('id, ragione_sociale, email_principale, email_pec, email_amministrazione, citta, indirizzo, provincia, codice_cliente')
         .eq('id', ticket.id_cliente)
         .single()
       
@@ -95,6 +101,26 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
       }
     } catch (err) {
       console.error('Errore caricamento cliente:', err)
+    }
+  }
+
+  // ✅ Carica dati macchinario (se presente nel ticket)
+  async function loadMacchinario() {
+    if (!ticket.id_macchinario) return
+    
+    try {
+      const { data, error } = await supabase
+        .from('macchinari')
+        .select('id, tipo_macchinario, marca, modello, numero_seriale, ubicazione_specifica')
+        .eq('id', ticket.id_macchinario)
+        .single()
+      
+      if (!error && data) {
+        setMacchinario(data)
+        console.log('✅ Macchinario caricato:', data)
+      }
+    } catch (err) {
+      console.error('Errore caricamento macchinario:', err)
     }
   }
 
@@ -769,7 +795,37 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white break-words">
               {ticket.cliente?.ragione_sociale || ticket.clienti?.ragione_sociale || cliente?.ragione_sociale || 'Cliente'}
             </h2>
-            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
+            
+            {/* ✅ Info Sede/Filiale */}
+            {cliente && (cliente.citta || cliente.indirizzo) && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <MapPin size={14} className="text-purple-500 flex-shrink-0" />
+                <span className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">
+                  {cliente.citta}{cliente.indirizzo ? ` - ${cliente.indirizzo}` : ''}{cliente.provincia ? ` (${cliente.provincia})` : ''}
+                  {cliente.codice_cliente && <span className="text-gray-400 ml-1">• Cod. {cliente.codice_cliente}</span>}
+                </span>
+              </div>
+            )}
+            
+            {/* ✅ Info Macchinario con Ubicazione */}
+            {macchinario && (
+              <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 bg-amber-50 dark:bg-amber-900/20 rounded-lg inline-flex">
+                <Wrench size={14} className="text-amber-600 flex-shrink-0" />
+                <span className="text-xs sm:text-sm text-amber-700 dark:text-amber-400">
+                  {macchinario.tipo_macchinario}
+                  {macchinario.marca && ` ${macchinario.marca}`}
+                  {macchinario.modello && ` ${macchinario.modello}`}
+                  {macchinario.numero_seriale && <span className="text-amber-500"> (SN: {macchinario.numero_seriale})</span>}
+                </span>
+                {macchinario.ubicazione_specifica && (
+                  <span className="ml-2 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded text-xs font-medium">
+                    📍 {macchinario.ubicazione_specifica}
+                  </span>
+                )}
+              </div>
+            )}
+            
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2 truncate">
               {ticket.oggetto}
             </p>
           </div>

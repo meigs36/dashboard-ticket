@@ -19,6 +19,7 @@ export default function TicketPage() {
   const [filtroPriorita, setFiltroPriorita] = useState('tutti')
   const [filtroAgente, setFiltroAgente] = useState('tutti')
   const [filtroCanale, setFiltroCanale] = useState('tutti')
+  const [filtroTipoMacchinario, setFiltroTipoMacchinario] = useState('tutti')  // ✅ NUOVO
   const [mostraFiltri, setMostraFiltri] = useState(false)
   
   // ⚡ NUOVO: Lista tecnici
@@ -32,6 +33,21 @@ export default function TicketPage() {
     risolti: 0,
     critici: 0,
     tempoMedio: '-'
+  })
+
+  // ✅ NUOVO: Lista tipi macchinario unici (derivata dai ticket)
+  const tipiMacchinarioUnici = [...new Set(
+    tickets
+      .filter(t => t.macchinari?.tipo_macchinario)
+      .map(t => t.macchinari.tipo_macchinario)
+  )].sort()
+
+  // ✅ NUOVO: Statistiche per tipo macchinario
+  const statsMacchinari = tipiMacchinarioUnici.map(tipo => {
+    const ticketTipo = tickets.filter(t => t.macchinari?.tipo_macchinario === tipo)
+    const aperti = ticketTipo.filter(t => t.stato === 'aperto' || t.stato === 'in_lavorazione' || t.stato === 'assegnato').length
+    const chiusi = ticketTipo.filter(t => t.stato === 'chiuso' || t.stato === 'risolto').length
+    return { tipo, totali: ticketTipo.length, aperti, chiusi }
   })
 
   useEffect(() => {
@@ -169,7 +185,8 @@ export default function TicketPage() {
       ticket.numero_ticket?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.oggetto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.clienti?.ragione_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.descrizione?.toLowerCase().includes(searchTerm.toLowerCase())
+      ticket.descrizione?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ticket.macchinari?.tipo_macchinario?.toLowerCase().includes(searchTerm.toLowerCase())  // ✅ NUOVO
     
     // ✅ FIX 3: matchStato include bassa/media/alta ma ESCLUDE critica
     const matchStato = filtroStato === 'tutti' || 
@@ -194,7 +211,14 @@ export default function TicketPage() {
     // ⚡ NUOVO: Filtro per canale origine
     const matchCanale = filtroCanale === 'tutti' || ticket.canale_origine === filtroCanale
     
-    return matchRicerca && matchStato && matchPriorita && matchAgente && matchCanale
+    // ✅ NUOVO: Filtro per tipo macchinario
+    const matchTipoMacchinario = filtroTipoMacchinario === 'tutti' || 
+      (filtroTipoMacchinario === 'senza_macchinario' 
+        ? !ticket.macchinari?.tipo_macchinario
+        : ticket.macchinari?.tipo_macchinario === filtroTipoMacchinario
+      )
+    
+    return matchRicerca && matchStato && matchPriorita && matchAgente && matchCanale && matchTipoMacchinario
   })
 
   const resetFiltri = () => {
@@ -202,6 +226,7 @@ export default function TicketPage() {
     setFiltroPriorita('tutti')
     setFiltroAgente('tutti')
     setFiltroCanale('tutti')
+    setFiltroTipoMacchinario('tutti')  // ✅ NUOVO
     setSearchTerm('')
   }
 
@@ -319,7 +344,7 @@ export default function TicketPage() {
             <div className="flex-1 min-w-[300px] relative">
               <input
                 type="text"
-                placeholder="Cerca per numero, cliente, oggetto..."
+                placeholder="Cerca per numero, cliente, oggetto, macchinario..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -337,7 +362,7 @@ export default function TicketPage() {
             <button 
               onClick={() => setMostraFiltri(!mostraFiltri)}
               className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
-                mostraFiltri || filtroStato !== 'tutti' || filtroPriorita !== 'tutti' || filtroAgente !== 'tutti' || filtroCanale !== 'tutti'
+                mostraFiltri || filtroStato !== 'tutti' || filtroPriorita !== 'tutti' || filtroAgente !== 'tutti' || filtroCanale !== 'tutti' || filtroTipoMacchinario !== 'tutti'
                   ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-400' 
                   : 'border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-gray-300'
               }`}
@@ -349,7 +374,7 @@ export default function TicketPage() {
 
           {mostraFiltri && (
             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Stato</label>
                   <select 
@@ -379,6 +404,29 @@ export default function TicketPage() {
                     <option value="media">Media</option>
                     <option value="alta">Alta</option>
                     <option value="critica">Critica</option>
+                  </select>
+                </div>
+
+                {/* ✅ NUOVO: FILTRO TIPO MACCHINARIO */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Tipo Macchinario
+                  </label>
+                  <select 
+                    value={filtroTipoMacchinario}
+                    onChange={(e) => setFiltroTipoMacchinario(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="tutti">🔧 Tutti i tipi</option>
+                    <option value="senza_macchinario">❓ Senza macchinario</option>
+                    {tipiMacchinarioUnici.map((tipo) => {
+                      const stat = statsMacchinari.find(s => s.tipo === tipo)
+                      return (
+                        <option key={tipo} value={tipo}>
+                          {tipo} ({stat?.aperti || 0} aperti / {stat?.chiusi || 0} chiusi)
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
 
@@ -435,6 +483,37 @@ export default function TicketPage() {
                   Reset tutti i filtri
                 </button>
               </div>
+              
+              {/* ✅ NUOVO: Statistiche per tipo macchinario */}
+              {statsMacchinari.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                    📊 Riepilogo per Tipo Macchinario
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {statsMacchinari.map(({ tipo, totali, aperti, chiusi }) => (
+                      <button
+                        key={tipo}
+                        onClick={() => setFiltroTipoMacchinario(filtroTipoMacchinario === tipo ? 'tutti' : tipo)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          filtroTipoMacchinario === tipo
+                            ? 'bg-amber-500 text-white shadow-md'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {tipo}
+                        <span className={`ml-1.5 px-1.5 py-0.5 rounded ${
+                          filtroTipoMacchinario === tipo
+                            ? 'bg-amber-600'
+                            : aperti > 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        }`}>
+                          {aperti > 0 ? `${aperti} aperti` : `${chiusi} chiusi`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -529,11 +608,11 @@ export default function TicketPage() {
               Nessun ticket trovato
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {searchTerm || filtroStato !== 'tutti' || filtroPriorita !== 'tutti' || filtroCanale !== 'tutti'
+              {searchTerm || filtroStato !== 'tutti' || filtroPriorita !== 'tutti' || filtroCanale !== 'tutti' || filtroTipoMacchinario !== 'tutti'
                 ? 'Prova a modificare i filtri di ricerca'
                 : 'Inizia creando il tuo primo ticket'}
             </p>
-            {!searchTerm && filtroStato === 'tutti' && filtroPriorita === 'tutti' && filtroCanale === 'tutti' && (
+            {!searchTerm && filtroStato === 'tutti' && filtroPriorita === 'tutti' && filtroCanale === 'tutti' && filtroTipoMacchinario === 'tutti' && (
               <Link
                 href="/ticket/nuovo"
                 className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"

@@ -383,6 +383,14 @@ export default function NotificationDropdownAdvanced({ userProfile }) {
 
   // Segna notifica permanente come letta
   async function markAsRead(notificaId) {
+    // ✅ FIX: Verifica che sia un UUID valido (notifiche permanenti dal DB)
+    // Le notifiche dinamiche hanno ID tipo "contratto-123" e non vanno marcate
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!notificaId || !uuidRegex.test(notificaId)) {
+      console.log('Skip markAsRead per notifica dinamica:', notificaId)
+      return
+    }
+    
     try {
       await supabase.rpc('mark_team_notification_read', { 
         notification_id: notificaId 
@@ -427,7 +435,10 @@ export default function NotificationDropdownAdvanced({ userProfile }) {
     const tutte = [
       ...notifichePermanenti.map(n => ({ ...n, isPermanent: true })),
       ...notifiche.map(n => ({ ...n, isPermanent: false }))
-    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    ]
+    // ✅ FIX: Filtra notifiche null/undefined e ordina
+    .filter(n => n && n.id)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
 
     switch (tab) {
       case 'permanenti':
@@ -523,12 +534,16 @@ export default function NotificationDropdownAdvanced({ userProfile }) {
               </div>
             ) : (
               filteredNotifications.map((notifica) => {
-                const IconComponent = notifica.icon || Bell
+                // ✅ FIX: Verifica che icon sia un componente React valido
+                const IconComponent = (typeof notifica.icon === 'function') ? notifica.icon : Bell
                 return (
-                  <button
+                  <div
                     key={notifica.id}
                     onClick={() => handleNotificationClick(notifica)}
-                    className={`w-full px-4 py-3 flex gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left ${
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && handleNotificationClick(notifica)}
+                    className={`w-full px-4 py-3 flex gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left cursor-pointer ${
                       notifica.isPermanent ? 'bg-amber-50/50' : ''
                     }`}
                   >
@@ -547,14 +562,14 @@ export default function NotificationDropdownAdvanced({ userProfile }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-gray-900 text-sm truncate">
-                          {notifica.titolo}
+                          {notifica.titolo || 'Notifica'}
                         </p>
                         {notifica.isPermanent && (
                           <span className="flex-shrink-0 w-2 h-2 bg-amber-500 rounded-full" />
                         )}
                       </div>
                       <p className="text-sm text-gray-600 truncate">
-                        {notifica.descrizione}
+                        {notifica.descrizione || ''}
                       </p>
                       {notifica.dettaglio && (
                         <p className="text-xs text-gray-500 mt-0.5">
@@ -589,7 +604,7 @@ export default function NotificationDropdownAdvanced({ userProfile }) {
                         <ChevronRight size={16} className="text-gray-300" />
                       )}
                     </div>
-                  </button>
+                  </div>
                 )
               })
             )}
