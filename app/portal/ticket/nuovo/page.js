@@ -6,6 +6,10 @@
 // 2. ✅ Preselezione automatica del macchinario nel dropdown
 // 3. ✅ Banner informativo quando macchinario è preselezionato
 // 4. ✅ Suspense boundary per useSearchParams (Next.js 14+)
+//
+// 🔧 MODIFICHE APPLICATE (15 Dic 2025):
+// 5. ✅ FIX MULTI-SEDE: Usa sedeAttiva invece di customerProfile.cliente_id
+// 6. ✅ FIX: Ticket viene creato con il cliente_id della sede attiva
 
 'use client'
 
@@ -13,14 +17,21 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
-import { ArrowLeft, Send, Wrench, AlertCircle, CheckCircle, Info } from 'lucide-react'
+import { ArrowLeft, Send, Wrench, AlertCircle, CheckCircle, Info, MapPin } from 'lucide-react'
 import Link from 'next/link'
 
 // ✅ Componente interno che usa useSearchParams
 function NuovoTicketForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, customerProfile, loading: authLoading } = useCustomerAuth()
+  const { 
+    user, 
+    customerProfile, 
+    loading: authLoading,
+    // ✅ MULTI-SEDE
+    sedeAttiva,
+    isMultiSede
+  } = useCustomerAuth()
   
   // ✅ Leggi parametro macchinario dalla URL
   const macchinarioIdFromUrl = searchParams.get('macchinario')
@@ -41,17 +52,24 @@ function NuovoTicketForm() {
     descrizione: ''
   })
 
+  // ✅ MULTI-SEDE: Determina il cliente_id corretto
+  const clienteId = sedeAttiva?.id || customerProfile?.cliente_id
+  const clienteNome = sedeAttiva?.ragione_sociale || customerProfile?.ragione_sociale
+  const clienteCodice = sedeAttiva?.codice_cliente || customerProfile?.codice_cliente
+  const clienteCitta = sedeAttiva?.citta
+
   // Carica macchinari del cliente
   useEffect(() => {
     const fetchMacchinari = async () => {
-      if (!customerProfile?.cliente_id) return
+      // ✅ MULTI-SEDE: Usa clienteId invece di customerProfile.cliente_id
+      if (!clienteId) return
       
       setLoadingMacchinari(true)
       try {
         const { data, error } = await supabase
           .from('macchinari')
           .select('id, tipo_macchinario, marca, modello, numero_seriale')
-          .eq('id_cliente', customerProfile.cliente_id)
+          .eq('id_cliente', clienteId)  // ✅ USA SEDE ATTIVA
           .eq('stato', 'attivo')
           .order('tipo_macchinario')
         
@@ -78,7 +96,7 @@ function NuovoTicketForm() {
     }
     
     fetchMacchinari()
-  }, [customerProfile?.cliente_id, macchinarioIdFromUrl])
+  }, [clienteId, macchinarioIdFromUrl])  // ✅ USA clienteId
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -119,10 +137,11 @@ function NuovoTicketForm() {
     }
 
     try {
+      // ✅ MULTI-SEDE: Usa clienteId (sedeAttiva) invece di customerProfile.cliente_id
       const { data, error: insertError } = await supabase
         .from('ticket')
         .insert([{
-          id_cliente: customerProfile.cliente_id,
+          id_cliente: clienteId,  // ✅ USA SEDE ATTIVA
           id_macchinario: formData.id_macchinario || null,
           categoria: formData.categoria,
           oggetto: formData.oggetto.trim(),
@@ -136,7 +155,7 @@ function NuovoTicketForm() {
 
       if (insertError) throw insertError
 
-      console.log('✅ Ticket creato:', data)
+      console.log('✅ Ticket creato:', data, 'per cliente:', clienteId)
       setSuccess(true)
       
       // Redirect dopo 2 secondi
@@ -176,6 +195,12 @@ function NuovoTicketForm() {
             La tua richiesta di assistenza è stata ricevuta. 
             Ti contatteremo il prima possibile.
           </p>
+          {/* ✅ Mostra sede se multi-sede */}
+          {isMultiSede && clienteCitta && (
+            <p className="text-sm text-blue-600 mb-4">
+              📍 Sede: {clienteCitta}
+            </p>
+          )}
           <p className="text-sm text-gray-500">
             Reindirizzamento alla dashboard...
           </p>
@@ -233,19 +258,28 @@ function NuovoTicketForm() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
           
-          {/* Info Cliente (readonly) */}
+          {/* Info Cliente (readonly) - ✅ AGGIORNATO PER MULTI-SEDE */}
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
             <label className="block text-sm font-medium text-blue-800 mb-1">
               Cliente
             </label>
             <p className="text-lg font-semibold text-blue-900">
-              {customerProfile?.ragione_sociale || 'Caricamento...'}
+              {clienteNome || 'Caricamento...'}
             </p>
-            {customerProfile?.codice_cliente && (
-              <p className="text-sm text-blue-700">
-                Cod. {customerProfile.codice_cliente}
-              </p>
-            )}
+            <div className="flex items-center gap-3 mt-1">
+              {clienteCodice && (
+                <p className="text-sm text-blue-700">
+                  Cod. {clienteCodice}
+                </p>
+              )}
+              {/* ✅ Mostra sede se multi-sede */}
+              {isMultiSede && clienteCitta && (
+                <p className="text-sm text-blue-600 flex items-center gap-1">
+                  <MapPin size={14} />
+                  {clienteCitta}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Macchinario */}
