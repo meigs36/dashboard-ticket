@@ -234,10 +234,13 @@ export default function CustomerOnboardingWizard({
   const currentStepConfig = steps[currentStep - 1]
 
   const DOCUMENT_CATEGORIES = [
-    { id: 'visura_camerale', label: 'Visura Camerale', icon: '🏢' },
-    { id: 'certificato_agibilita', label: 'Certificato Agibilità', icon: '✅' },
-    { id: 'planimetria', label: 'Planimetria Studio', icon: '🗺️' },
-    { id: 'certificazioni_sanitarie', label: 'Certificazioni Sanitarie', icon: '🏥' },
+    { id: 'certificato_agibilita', label: 'Certificato di Agibilità dei locali', icon: '✅' },
+    { id: 'scia_sanitaria', label: 'SCIA sanitaria', icon: '📋' },
+    { id: 'autorizzazione_ats_asl', label: 'Autorizzazione ATS / ASL', icon: '🏥' },
+    { id: 'polizza_rc', label: 'Polizza RC professionale', icon: '🛡️' },
+    { id: 'contratti_fornitori', label: 'Contratti con fornitori principali', icon: '📝' },
+    { id: 'contratti_manutenzione', label: 'Contratti di manutenzione', icon: '🔧' },
+    { id: 'certificazioni_impianti', label: 'Certificazioni impianti (elettrico, gas, aria)', icon: '⚡' },
     { id: 'altro', label: 'Altro Documento', icon: '📄' }
   ]
 
@@ -524,7 +527,7 @@ export default function CustomerOnboardingWizard({
           form_data: formData,
           current_step: currentStep,
           updated_at: new Date().toISOString()
-        })
+        }, { onConflict: 'cliente_id' })
 
       if (error) throw error
       alert('✅ Bozza salvata con successo!')
@@ -1387,7 +1390,7 @@ export default function CustomerOnboardingWizard({
                       {currentStepConfig.label}
                     </h2>
                     <p className="text-sm text-gray-600">
-                      Carica documenti utili (opzionale)
+                      (opzionale) Carica i <span className="font-bold text-purple-700">Tuoi</span> documenti utili in un'area sicura e protetta da chiavi criptate la cui visibilità è per te esclusiva e non condivisa. Un'area dove raccogliere i documenti importanti in un unico luogo.
                     </p>
                   </div>
                 </div>

@@ -21,6 +21,12 @@
 // 13. ✅ MULTI-SEDE: Supporto clienti con più sedi (stessa P.IVA)
 // 14. ✅ MULTI-SEDE: SedePicker per switch sede senza ri-login
 // 15. ✅ MULTI-SEDE: Filtro dati per sede attiva
+//
+// 🔧 MODIFICHE APPLICATE (14 Dic 2025):
+// 16. ✅ Campo ricerca macchinari (tipo, marca, modello, matricola, ubicazione)
+// 17. ✅ Filtro dropdown per ubicazione/sala
+// 18. ✅ Colonna Ubicazione nella tabella macchinari
+// 19. ✅ Ordinamento alfabetico per tipo apparecchiatura
 
 'use client'
 
@@ -36,7 +42,8 @@ import {
   Mail, Phone, MapPin, CheckCircle2, AlertCircle,
   Download, Eye, Edit, Plus, Clock, Shield, Ticket,
   ChevronRight, ArrowLeft, Receipt, Euro, Calendar,
-  CreditCard, FileCheck, X, AlertTriangle, Settings
+  CreditCard, FileCheck, X, AlertTriangle, Settings,
+  Search
 } from 'lucide-react'
 import LibroMacchinePDF from '@/components/LibroMacchinePDF'
 
@@ -69,6 +76,11 @@ export default function CustomerDashboard() {
   const [ticketModalOpen, setTicketModalOpen] = useState(false)
   const [selectedMacchinario, setSelectedMacchinario] = useState(null)
   const [macchinarioTickets, setMacchinarioTickets] = useState([])
+  
+  // ✅ NUOVO: Stati per ricerca e filtro macchinari
+  const [searchMacchinari, setSearchMacchinari] = useState('')
+  const [filtroUbicazione, setFiltroUbicazione] = useState('')
+  const [filtroManutenzione, setFiltroManutenzione] = useState('')
   
   const [dashboardData, setDashboardData] = useState({
     cliente: customerProfile || null,
@@ -170,7 +182,7 @@ export default function CustomerDashboard() {
         `)
         .eq('id_cliente', clienteId)
         .neq('stato', 'dismesso')
-        .order('marca', { ascending: true })
+        .order('tipo_macchinario', { ascending: true })
 
       if (macchinariError) {
         console.error('❌ Errore caricamento macchinari:', macchinariError)
@@ -1039,177 +1051,310 @@ export default function CustomerDashboard() {
             </div>
           )}
 
-          {/* ✅ MACCHINARI SECTION - Versione Tabellare Completa */}
+          {/* ✅ MACCHINARI SECTION - Versione con Ricerca e Ubicazione */}
           {activeSection === 'macchinari' && (
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setActiveSection('overview')}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <ArrowLeft className="w-5 h-5 text-gray-600" />
-                  </button>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Macchinari Installati
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {macchinari.length} macchinari registrati
-                    </p>
-                  </div>
-                </div>
+              {(() => {
+                // Lista ubicazioni uniche
+                const ubicazioniUniche = [...new Set(
+                  macchinari
+                    .map(m => m.ubicazione_specifica)
+                    .filter(Boolean)
+                )].sort()
                 
-                {/* Pulsante Stampa Libro Macchine */}
-                <LibroMacchinePDF 
-                  clienteId={sedeAttiva?.id || customerProfile?.cliente_id}
-                  clienteNome={sedeAttiva?.ragione_sociale || dashboardData.cliente?.ragione_sociale}
-                />
-              </div>
-
-              {macchinari.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Tipo Apparecchiatura
-                        </th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Matricola
-                        </th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Installazione
-                        </th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Scad. Manutenzione
-                        </th>
-                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Ticket
-                        </th>
-                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Azioni
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {macchinari.map((macch) => {
-                        const scadenza = getScadenzaManutenzione(macch)
-                        const ScadenzaIcon = scadenza.icon
-                        
-                        return (
-                          <tr 
-                            key={macch.id} 
-                            className="hover:bg-gray-50 transition-colors"
+                // Filtra macchinari
+                const macchinariFiltered = macchinari.filter(macch => {
+                  // Filtro ricerca testo
+                  const searchLower = searchMacchinari.toLowerCase()
+                  const matchSearch = !searchMacchinari || 
+                    (macch.tipo_macchinario || '').toLowerCase().includes(searchLower) ||
+                    (macch.marca || '').toLowerCase().includes(searchLower) ||
+                    (macch.modello || '').toLowerCase().includes(searchLower) ||
+                    (macch.numero_seriale || '').toLowerCase().includes(searchLower) ||
+                    (macch.ubicazione_specifica || '').toLowerCase().includes(searchLower)
+                  
+                  // Filtro ubicazione
+                  const matchUbicazione = !filtroUbicazione || 
+                    macch.ubicazione_specifica === filtroUbicazione
+                  
+                  // Filtro stato manutenzione
+                  let matchManutenzione = true
+                  if (filtroManutenzione) {
+                    const scadenzaInfo = getScadenzaManutenzione(macch)
+                    matchManutenzione = scadenzaInfo.status === filtroManutenzione
+                  }
+                  
+                  return matchSearch && matchUbicazione && matchManutenzione
+                })
+                
+                // Ordina per tipo macchinario alfabetico
+                const macchinariSorted = [...macchinariFiltered].sort((a, b) => 
+                  (a.tipo_macchinario || '').localeCompare(b.tipo_macchinario || '')
+                )
+                
+                return (
+                  <>
+                    {/* Header con ricerca */}
+                    <div className="flex flex-col gap-4 mb-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setActiveSection('overview')}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                           >
-                            {/* Tipo Apparecchiatura */}
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <Wrench className="w-5 h-5 text-amber-600" />
-                                </div>
-                                <div>
-                                  <p className="font-medium text-gray-900">
-                                    {macch.tipo_macchinario || 'N/D'}
-                                  </p>
-                                  <p className="text-sm text-gray-500">
-                                    {macch.marca && `${macch.marca} `}{macch.modello || ''}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            
-                            {/* Matricola (ex Seriale) */}
-                            <td className="py-4 px-4">
-                              <span className="font-mono text-sm text-gray-700">
-                                {macch.numero_seriale || 'N/D'}
-                              </span>
-                              {macch.numero_libro && (
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  Libro: {macch.numero_libro}
-                                </p>
-                              )}
-                            </td>
-                            
-                            {/* Data Installazione */}
-                            <td className="py-4 px-4">
-                              {macch.data_installazione ? (
-                                <span className="text-sm text-gray-700">
-                                  {new Date(macch.data_installazione).toLocaleDateString('it-IT', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric'
-                                  })}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-gray-400">N/D</span>
-                              )}
-                            </td>
-                            
-                            {/* Scadenza Manutenzione */}
-                            <td className="py-4 px-4">
-                              {scadenza.status === 'unknown' ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium text-gray-400 bg-gray-100">
-                                  Scaduto
-                                </span>
-                              ) : (
-                                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${scadenza.className}`}>
-                                  {ScadenzaIcon && <ScadenzaIcon className="w-3.5 h-3.5" />}
-                                  {scadenza.label}
-                                </div>
-                              )}
-                            </td>
-                            
-                            {/* Ticket Badge Cliccabile */}
-                            <td className="py-4 px-4 text-center">
-                              {macch.ticketAperti > 0 ? (
-                                <button
-                                  onClick={() => openTicketModal(macch)}
-                                  className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-red-100 text-red-700 font-bold text-sm rounded-full hover:bg-red-200 transition-colors"
-                                  title={`${macch.ticketAperti} ticket aperti - Clicca per vedere`}
+                            <ArrowLeft className="w-5 h-5 text-gray-600" />
+                          </button>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              Macchinari Installati
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              {macchinariFiltered.length === macchinari.length 
+                                ? `${macchinari.length} macchinari registrati`
+                                : `${macchinariFiltered.length} di ${macchinari.length} macchinari`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Pulsante Stampa Libro Macchine */}
+                        <LibroMacchinePDF 
+                          clienteId={sedeAttiva?.id || customerProfile?.cliente_id}
+                          clienteNome={sedeAttiva?.ragione_sociale || dashboardData.cliente?.ragione_sociale}
+                          sedeNome={sedeAttiva?.citta}
+                        />
+                      </div>
+                      
+                      {/* Barra ricerca e filtri */}
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        {/* Campo ricerca */}
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Cerca per tipo, marca, modello, matricola..."
+                            value={searchMacchinari}
+                            onChange={(e) => setSearchMacchinari(e.target.value)}
+                            className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          />
+                          {searchMacchinari && (
+                            <button
+                              onClick={() => setSearchMacchinari('')}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        
+                        {/* Filtro ubicazione */}
+                        {ubicazioniUniche.length > 0 && (
+                          <select
+                            value={filtroUbicazione}
+                            onChange={(e) => setFiltroUbicazione(e.target.value)}
+                            className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white min-w-[200px]"
+                          >
+                            <option value="">🏠 Tutte le ubicazioni</option>
+                            {ubicazioniUniche.map(ubi => (
+                              <option key={ubi} value={ubi}>📍 {ubi}</option>
+                            ))}
+                          </select>
+                        )}
+                        
+                        {/* Filtro stato manutenzione */}
+                        <select
+                          value={filtroManutenzione}
+                          onChange={(e) => setFiltroManutenzione(e.target.value)}
+                          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white min-w-[180px]"
+                        >
+                          <option value="">🔧 Tutte le scadenze</option>
+                          <option value="expired">🔴 Scaduta</option>
+                          <option value="warning">🟠 In scadenza</option>
+                          <option value="ok">🟢 Valida</option>
+                          <option value="unknown">⚪ Non impostata</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {macchinariSorted.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Tipo Apparecchiatura
+                              </th>
+                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Matricola
+                              </th>
+                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Installazione
+                              </th>
+                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Ubicazione
+                              </th>
+                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Scad. Manutenzione
+                              </th>
+                              <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Ticket
+                              </th>
+                              <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Azioni
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {macchinariSorted.map((macch) => {
+                              const scadenza = getScadenzaManutenzione(macch)
+                              const ScadenzaIcon = scadenza.icon
+                              
+                              return (
+                                <tr 
+                                  key={macch.id} 
+                                  className="hover:bg-gray-50 transition-colors"
                                 >
-                                  {macch.ticketAperti}
-                                </button>
-                              ) : macch.ticketTotali > 0 ? (
-                                <button
-                                  onClick={() => openTicketModal(macch)}
-                                  className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-100 text-gray-500 font-medium text-sm rounded-full hover:bg-gray-200 transition-colors"
-                                  title={`${macch.ticketTotali} ticket totali - Clicca per vedere`}
-                                >
-                                  {macch.ticketTotali}
-                                </button>
-                              ) : (
-                                <span className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-50 text-gray-400 text-sm rounded-full">
-                                  0
-                                </span>
-                              )}
-                            </td>
-                            
-                            {/* Pulsante Nuovo Ticket */}
-                            <td className="py-4 px-4 text-center">
-                              <Link
-                                href={`/portal/ticket/nuovo?macchinario=${macch.id}`}
-                                className="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                title={`Apri nuovo ticket per ${macch.tipo_macchinario || 'questo macchinario'}`}
-                              >
-                                <Plus className="w-4 h-4" />
-                              </Link>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 mb-2">Nessun macchinario registrato</p>
-                  <p className="text-sm text-gray-400">
-                    I macchinari verranno visualizzati qui una volta registrati nel sistema
-                  </p>
-                </div>
-              )}
+                                  {/* Tipo Apparecchiatura */}
+                                  <td className="py-4 px-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <Wrench className="w-5 h-5 text-amber-600" />
+                                      </div>
+                                      <div>
+                                        <p className="font-medium text-gray-900">
+                                          {macch.tipo_macchinario || 'N/D'}
+                                        </p>
+                                        <p className="text-sm text-gray-500">
+                                          {macch.marca && `${macch.marca} `}{macch.modello || ''}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  
+                                  {/* Matricola */}
+                                  <td className="py-4 px-4">
+                                    <span className="font-mono text-sm text-gray-700">
+                                      {macch.numero_seriale || 'N/D'}
+                                    </span>
+                                    {macch.numero_libro && (
+                                      <p className="text-xs text-gray-400 mt-0.5">
+                                        Libro: {macch.numero_libro}
+                                      </p>
+                                    )}
+                                  </td>
+                                  
+                                  {/* Data Installazione */}
+                                  <td className="py-4 px-4">
+                                    {macch.data_installazione ? (
+                                      <span className="text-sm text-gray-700">
+                                        {new Date(macch.data_installazione).toLocaleDateString('it-IT', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          year: 'numeric'
+                                        })}
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm text-gray-400">N/D</span>
+                                    )}
+                                  </td>
+                                  
+                                  {/* Ubicazione */}
+                                  <td className="py-4 px-4">
+                                    {macch.ubicazione_specifica ? (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-sm rounded-md font-medium">
+                                        <MapPin className="w-3.5 h-3.5" />
+                                        {macch.ubicazione_specifica}
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm text-gray-400">-</span>
+                                    )}
+                                  </td>
+                                  
+                                  {/* Scadenza Manutenzione */}
+                                  <td className="py-4 px-4">
+                                    {scadenza.status === 'unknown' ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium text-gray-400 bg-gray-100">
+                                        Non impostata
+                                      </span>
+                                    ) : (
+                                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${scadenza.className}`}>
+                                        {ScadenzaIcon && <ScadenzaIcon className="w-3.5 h-3.5" />}
+                                        {scadenza.label}
+                                      </div>
+                                    )}
+                                  </td>
+                                  
+                                  {/* Ticket Badge Cliccabile */}
+                                  <td className="py-4 px-4 text-center">
+                                    {macch.ticketAperti > 0 ? (
+                                      <button
+                                        onClick={() => openTicketModal(macch)}
+                                        className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-red-100 text-red-700 font-bold text-sm rounded-full hover:bg-red-200 transition-colors"
+                                        title={`${macch.ticketAperti} ticket aperti - Clicca per vedere`}
+                                      >
+                                        {macch.ticketAperti}
+                                      </button>
+                                    ) : macch.ticketTotali > 0 ? (
+                                      <button
+                                        onClick={() => openTicketModal(macch)}
+                                        className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-100 text-gray-500 font-medium text-sm rounded-full hover:bg-gray-200 transition-colors"
+                                        title={`${macch.ticketTotali} ticket totali - Clicca per vedere`}
+                                      >
+                                        {macch.ticketTotali}
+                                      </button>
+                                    ) : (
+                                      <span className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-50 text-gray-400 text-sm rounded-full">
+                                        0
+                                      </span>
+                                    )}
+                                  </td>
+                                  
+                                  {/* Pulsante Nuovo Ticket */}
+                                  <td className="py-4 px-4 text-center">
+                                    <Link
+                                      href={`/portal/ticket/nuovo?macchinario=${macch.id}`}
+                                      className="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                      title={`Apri nuovo ticket per ${macch.tipo_macchinario || 'questo macchinario'}`}
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </Link>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : macchinari.length > 0 ? (
+                      // Nessun risultato dalla ricerca
+                      <div className="text-center py-12">
+                        <Search className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                          Nessun risultato
+                        </h3>
+                        <p className="text-gray-500 mb-4">
+                          Nessun macchinario corrisponde ai criteri di ricerca
+                        </p>
+                        <button
+                          onClick={() => { setSearchMacchinari(''); setFiltroUbicazione(''); setFiltroManutenzione(''); }}
+                          className="text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Cancella filtri
+                        </button>
+                      </div>
+                    ) : (
+                      // Nessun macchinario registrato
+                      <div className="text-center py-12">
+                        <Wrench className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500 mb-2">Nessun macchinario registrato</p>
+                        <p className="text-sm text-gray-400">
+                          I macchinari verranno visualizzati qui una volta registrati nel sistema
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )}
 

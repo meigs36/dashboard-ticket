@@ -1,799 +1,1660 @@
+// app/portal/dashboard/page.js
+// Dashboard Clienti - Versione con KPI Cliccabili + FATTURE + TICKET CLICCABILI + MACCHINARI + MULTI-SEDE
+//
+// 🔧 MODIFICHE APPLICATE (28 Nov 2025):
+// 1. ✅ KPI Cards cliccabili per navigare tra le sezioni
+// 2. ✅ Rimossa barra tab duplicata - navigazione solo via KPI
+// 3. ✅ NUOVO: Sezione Fatture con download PDF
+// 4. ✅ Fix query ticket e contratti
+//
+// 🔧 MODIFICHE APPLICATE (2 Dic 2025):
+// 5. ✅ Ticket cliccabili nella preview (Ticket Recenti)
+// 6. ✅ Ticket cliccabili nella lista completa (I Miei Ticket)
+// 7. ✅ Link a pagina dettaglio: /portal/ticket/[id]
+//
+// 🔧 MODIFICHE APPLICATE (4 Dic 2025):
+// 8. ✅ Query macchinari dalla tabella "macchinari" (non customer_macchinari)
+// 9. ✅ Nuova sezione Macchinari Installati con tabella compatta
+// 10. ✅ Badge numerico ticket aperti per ogni macchinario
+// 11. ✅ Modal per consultare ticket del macchinario specifico
+// 12. ✅ Indicatore scadenza manutenzione con alert visivo
+// 13. ✅ MULTI-SEDE: Supporto clienti con più sedi (stessa P.IVA)
+// 14. ✅ MULTI-SEDE: SedePicker per switch sede senza ri-login
+// 15. ✅ MULTI-SEDE: Filtro dati per sede attiva
+
 'use client'
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
-import TicketActionsModal from '@/components/TicketActionsModal'
-import ContrattoModal from '@/components/ContrattoModal'
-import InfrastrutturaForm from '@/components/InfrastrutturaForm'
+import Image from 'next/image'
+import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
+import SedePicker, { SedeBadge } from '@/components/SedePicker'
+import { supabase } from '@/lib/supabase'
+import {
+  Building2, Users, Wrench, FileText, LogOut,
+  Mail, Phone, MapPin, CheckCircle2, AlertCircle,
+  Download, Eye, Edit, Plus, Clock, Shield, Ticket,
+  ChevronRight, ArrowLeft, Receipt, Euro, Calendar,
+  CreditCard, FileCheck, X, AlertTriangle, Settings, Search 
+} from 'lucide-react'
 import LibroMacchinePDF from '@/components/LibroMacchinePDF'
 
-export default function ClienteDettaglio() {
-  const params = useParams()
-  const [cliente, setCliente] = useState(null)
-  const [macchinari, setMacchinari] = useState([])
-  const [contratti, setContratti] = useState([])
-  const [tickets, setTickets] = useState([])
+export default function CustomerDashboard() {
+  const router = useRouter()
+  const { 
+    user, 
+    customerProfile, 
+    authLoading, 
+    signOut,
+    // ✅ MULTI-SEDE
+    sedeAttiva,
+    sediCollegate,
+    isMultiSede 
+  } = useCustomerAuth()
+
+  // Stati
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('macchinari') // macchinari | ticket | contratti | infrastruttura
   
-  // Stati per modal ticket
-  const [ticketSelezionato, setTicketSelezionato] = useState(null)
-  const [mostraModalAzioni, setMostraModalAzioni] = useState(false)
+  // ✅ FIX: Refs per evitare loop e freeze
+  const isLoadingData = useRef(false)
+  const dataLoadedForClient = useRef(null)
   
-  // Stati per modal contratto
-  const [mostraModalContratto, setMostraModalContratto] = useState(false)
-  const [contrattoSelezionato, setContrattoSelezionato] = useState(null)
-  const [modalMode, setModalMode] = useState('view') // view | edit
+  const [activeSection, setActiveSection] = useState('overview')
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [pdfViewerUrl, setPdfViewerUrl] = useState(null)
+  const [pdfViewerTitle, setPdfViewerTitle] = useState('')
+  
+  // ✅ NUOVO: Stati per modal ticket macchinario
+  const [ticketModalOpen, setTicketModalOpen] = useState(false)
+  const [selectedMacchinario, setSelectedMacchinario] = useState(null)
+  const [macchinarioTickets, setMacchinarioTickets] = useState([])
+  const [searchMacchinari, setSearchMacchinari] = useState('')
+  const [filtroUbicazione, setFiltroUbicazione] = useState('')
+  
+  const [dashboardData, setDashboardData] = useState({
+    cliente: customerProfile || null,
+    referenti: [],
+    macchinari: [],        // ✅ Ora usa tabella "macchinari"
+    macchinariInstallati: [], // ✅ NUOVO: macchinari con conteggio ticket
+    documenti: [],
+    contratti: [],
+    tickets: [],
+    fatture: []
+  })
 
+  // Protezione route
   useEffect(() => {
-    if (params.id) {
-      loadCliente()
+    if (!authLoading && !user) {
+      router.push('/portal')
     }
-  }, [params.id])
+  }, [user, authLoading, router])
 
-  async function loadCliente() {
-    try {
-      // Carica cliente
-      const { data: clienteData, error: clienteError} = await supabase
-        .from('clienti')
-        .select('*')
-        .eq('id', params.id)
-        .single()
+  // Caricamento dati dashboard
+  useEffect(() => {
+    // ✅ FIX: Evita loop - carica solo se cliente valido e non già in caricamento
+    const clienteId = sedeAttiva?.id || customerProfile?.cliente_id
+    
+    if (clienteId && !isLoadingData.current) {
+      // Carica solo se è un cliente diverso da quello già caricato
+      if (dataLoadedForClient.current !== clienteId) {
+        loadDashboardData()
+      } else {
+        // Dati già caricati per questo cliente
+        setLoading(false)
+      }
+    }
+  }, [customerProfile?.cliente_id, sedeAttiva?.id])
 
-      if (clienteError) throw clienteError
-      setCliente(clienteData)
+  const loadDashboardData = async () => {
+    // ✅ FIX: Evita chiamate multiple
+    if (isLoadingData.current) {
+      console.log('⏳ Caricamento già in corso, skip')
+      return
+    }
+    
+    const clienteId = sedeAttiva?.id || customerProfile?.cliente_id
+    const codiceCliente = sedeAttiva?.codice_cliente || customerProfile?.codice_cliente
 
-      // Carica macchinari
-      const { data: macchinariData, error: macchinariError } = await supabase
-        .from('macchinari')
-        .select('*')
-        .eq('id_cliente', params.id)
-        .order('data_installazione', { ascending: false })
-
-      if (macchinariError) throw macchinariError
-      setMacchinari(macchinariData || [])
-
-      // Carica contratti usando codice_cliente
-const { data: contrattiData, error: contrattiError } = await supabase
-  .from('contratti')
-  .select('*')
-  .eq('codice_cliente', clienteData.codice_cliente)  // ✅ CORRETTO
-  .order('data_contratto', { ascending: false })  // ✅ CORRETTO
-
-if (contrattiError) {
-  console.error('❌ Errore caricamento contratti:', contrattiError)
-} else {
-  console.log('✅ Contratti caricati:', contrattiData?.length || 0, contrattiData)
-  setContratti(contrattiData || [])
-}
-
-      if (contrattiError) throw contrattiError
-      setContratti(contrattiData || [])
-
-      // Carica ticket con tutte le relazioni necessarie
-      const { data: ticketsData, error: ticketsError } = await supabase
-        .from('ticket')
-        .select(`
-          *,
-          cliente:clienti!ticket_id_cliente_fkey(
-            id,
-            ragione_sociale, 
-            codice_cliente,
-            telefono_principale,
-            email_riparazioni,
-            citta,
-            provincia
-          ),
-          macchinari(
-            tipo_macchinario, 
-            numero_seriale,
-            marca,
-            modello
-          )
-        `)
-        .eq('id_cliente', params.id)
-        .order('data_apertura', { ascending: false })
-
-      if (ticketsError) throw ticketsError
-      setTickets(ticketsData || [])
-
-    } catch (error) {
-      console.error('Errore caricamento:', error)
-    } finally {
+    if (!clienteId) {
+      console.error('❌ cliente_id non trovato')
       setLoading(false)
-    }
-  }
-
-  function handleTicketClick(ticket, e) {
-    if (e) e.stopPropagation()
-    setTicketSelezionato(ticket)
-    setMostraModalAzioni(true)
-  }
-
-  function handleModalClose() {
-    setMostraModalAzioni(false)
-    setTicketSelezionato(null)
-  }
-
-  function handleTicketUpdate() {
-    loadCliente()
-  }
-
-  function handleContrattoClick(contratto) {
-    setContrattoSelezionato(contratto)
-    setModalMode('view')
-    setMostraModalContratto(true)
-  }
-
-  function handleEditContratto(contratto) {
-    setContrattoSelezionato(contratto)
-    setModalMode('edit')
-    setMostraModalContratto(true)
-  }
-
-  async function handleDeleteContratto(contratto) {
-    if (!confirm(`Sei sicuro di voler eliminare il contratto "${contratto.nome_contratto}"?\n\nQuesta operazione non può essere annullata.`)) {
       return
     }
 
+    // ✅ FIX: Evita ricaricamento se già caricato per questo cliente
+    if (dataLoadedForClient.current === clienteId && dashboardData.cliente) {
+      console.log('⏳ Dati già caricati per cliente:', clienteId)
+      setLoading(false)
+      return
+    }
+
+    isLoadingData.current = true
+    
     try {
-      const { error } = await supabase
+      setLoading(true)
+      // ✅ MULTI-SEDE: Usa sedeAttiva se disponibile, altrimenti fallback a customerProfile
+      console.log('📊 Caricamento dashboard per cliente:', clienteId, 'codice:', codiceCliente)
+
+      if (!clienteId) {
+        console.error('❌ cliente_id non trovato in customerProfile:', customerProfile)
+        throw new Error('ID cliente non disponibile')
+      }
+
+      console.log('📊 Caricamento dashboard per cliente:', clienteId, 'codice:', codiceCliente, isMultiSede ? '(multi-sede)' : '')
+
+      // Carica referenti
+      const { data: referentiData } = await supabase
+        .from('customer_referenti')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .eq('attivo', true)
+        .order('principale', { ascending: false })
+
+      // ✅ MODIFICATO: Carica macchinari dalla tabella "macchinari" (non customer_macchinari)
+      const { data: macchinariData, error: macchinariError } = await supabase
+        .from('macchinari')
+        .select(`
+          id,
+          numero_seriale,
+          numero_libro,
+          tipo_macchinario,
+          marca,
+          modello,
+          data_installazione,
+          garanzia_scadenza,
+          garanzia_estensione_scadenza,
+          contratto_manutenzione,
+          stato,
+          ubicazione_specifica,
+          note_tecniche,
+          data_ultimo_intervento
+        `)
+        .eq('id_cliente', clienteId)
+        .neq('stato', 'dismesso')
+        .order('marca', { ascending: true })
+
+      if (macchinariError) {
+        console.error('❌ Errore caricamento macchinari:', macchinariError)
+      } else {
+        console.log('✅ Macchinari installati caricati:', macchinariData?.length || 0)
+      }
+
+      // ✅ NUOVO: Carica tickets e raggruppa per macchinario
+      const { data: ticketsData, error: ticketsError } = await supabase
+        .from('ticket')
+        .select(`
+          id,
+          numero_ticket,
+          oggetto,
+          descrizione,
+          stato,
+          priorita,
+          categoria,
+          canale_origine,
+          data_apertura,
+          data_chiusura,
+          id_macchinario
+        `)
+        .eq('id_cliente', clienteId)
+        .order('data_apertura', { ascending: false })
+        .limit(50)
+
+      if (ticketsError) {
+        console.error('❌ Errore caricamento ticket:', ticketsError)
+      }
+
+      // ✅ NUOVO: Calcola conteggio ticket aperti per ogni macchinario
+      const ticketApertiPerMacchinario = {}
+      const ticketTotaliPerMacchinario = {}
+      
+      ;(ticketsData || []).forEach(ticket => {
+        if (ticket.id_macchinario) {
+          // Conta totali
+          ticketTotaliPerMacchinario[ticket.id_macchinario] = 
+            (ticketTotaliPerMacchinario[ticket.id_macchinario] || 0) + 1
+          
+          // Conta solo aperti (non chiusi/risolti/annullati)
+          if (!['chiuso', 'risolto', 'annullato'].includes(ticket.stato)) {
+            ticketApertiPerMacchinario[ticket.id_macchinario] = 
+              (ticketApertiPerMacchinario[ticket.id_macchinario] || 0) + 1
+          }
+        }
+      })
+
+      // ✅ NUOVO: Arricchisci macchinari con conteggio ticket
+      const macchinariConTickets = (macchinariData || []).map(macch => ({
+        ...macch,
+        ticketAperti: ticketApertiPerMacchinario[macch.id] || 0,
+        ticketTotali: ticketTotaliPerMacchinario[macch.id] || 0
+      }))
+
+      // Carica documenti
+      const { data: documentiData } = await supabase
+        .from('customer_documents')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .eq('visibile_cliente', true)
+        .order('caricato_il', { ascending: false })
+        .limit(10)
+
+      // Carica contratti usando codice_cliente
+      const { data: contrattiData } = await supabase
         .from('contratti')
-        .delete()
-        .eq('id', contratto.id)
+        .select('*')
+        .eq('codice_cliente', codiceCliente)
+        .order('data_contratto', { ascending: false })
+        .limit(5)
 
-      if (error) throw error
+      // ✅ Carica fatture
+      const { data: fattureData, error: fattureError } = await supabase
+        .from('fatture')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('data_emissione', { ascending: false })
+        .limit(20)
 
-      alert('✅ Contratto eliminato con successo')
-      loadCliente()
+      if (fattureError) {
+        console.error('❌ Errore caricamento fatture:', fattureError)
+      } else {
+        console.log('✅ Fatture caricate:', fattureData?.length || 0)
+      }
+
+      setDashboardData({
+        cliente: customerProfile,
+        referenti: referentiData || [],
+        macchinari: macchinariConTickets,           // ✅ Macchinari con conteggio ticket
+        macchinariInstallati: macchinariConTickets, // ✅ Alias per retrocompatibilità
+        documenti: documentiData || [],
+        contratti: contrattiData || [],
+        tickets: ticketsData || [],
+        fatture: fattureData || []
+      })
+      
+      console.log('✅ Dashboard caricata')
+      
+      // ✅ FIX: Segna come caricato per questo cliente
+      dataLoadedForClient.current = clienteId
     } catch (error) {
-      console.error('Errore eliminazione contratto:', error)
-      alert('❌ Errore durante l\'eliminazione del contratto: ' + error.message)
+      console.error('Errore caricamento dashboard:', error)
+    } finally {
+      setLoading(false)
+      isLoadingData.current = false
     }
   }
 
-  function closeModalContratto() {
-    setMostraModalContratto(false)
-    setContrattoSelezionato(null)
-    setModalMode('view')
+  // ✅ NUOVO: Funzione per aprire modal ticket di un macchinario
+  const openTicketModal = (macchinario) => {
+    const { tickets } = dashboardData
+    const ticketsMacchinario = tickets.filter(t => t.id_macchinario === macchinario.id)
+    setSelectedMacchinario(macchinario)
+    setMacchinarioTickets(ticketsMacchinario)
+    setTicketModalOpen(true)
   }
 
-  function getStatoContrattoColor(stato) {
-    switch (stato) {
-      case 'attivo':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-      case 'scaduto':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-      case 'sospeso':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+  // ✅ NUOVO: Helper per verificare scadenza manutenzione
+  const getScadenzaManutenzione = (macchinario) => {
+    // Usa garanzia_scadenza come data riferimento per manutenzione
+    // Puoi modificare questo campo se hai un campo dedicato
+    const dataScadenza = macchinario.garanzia_scadenza || macchinario.garanzia_estensione_scadenza
+    
+    if (!dataScadenza) return { status: 'unknown', label: 'N/D', className: 'text-gray-400' }
+    
+    const oggi = new Date()
+    const scadenza = new Date(dataScadenza)
+    const giorniRimanenti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24))
+    
+    if (giorniRimanenti < 0) {
+      return { 
+        status: 'expired', 
+        label: 'Scaduta', 
+        className: 'text-red-600 bg-red-50',
+        icon: AlertTriangle
+      }
+    } else if (giorniRimanenti <= 30) {
+      return { 
+        status: 'warning', 
+        label: `${giorniRimanenti}gg`, 
+        className: 'text-amber-600 bg-amber-50',
+        icon: AlertCircle
+      }
+    } else {
+      return { 
+        status: 'ok', 
+        label: new Date(dataScadenza).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' }), 
+        className: 'text-green-600',
+        icon: CheckCircle2
+      }
     }
   }
 
+  const handleLogout = async () => {
+    await signOut()
+    router.push('/portal')
+  }
+
+  // Helper per visualizzare fattura PDF in modal
+  const downloadFattura = async (fattura) => {
+    try {
+      const pdfPath = fattura.storage_path || `fatture/${fattura.anno || new Date().getFullYear()}/fattura_${fattura.numero_fattura.replace('/', '-')}.pdf`
+      const bucket = fattura.storage_bucket || 'fatture-documenti'
+      
+      console.log('📄 Download fattura:', { bucket, pdfPath, fattura })
+      
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(pdfPath, 300)
+      
+      console.log('📄 Signed URL response:', { signedData, signedError })
+      
+      if (signedError) {
+        console.error('Errore creazione signed URL:', signedError)
+        alert(`Errore nel download della fattura: ${signedError.message}`)
+        return
+      }
+      
+      if (signedData?.signedUrl) {
+        console.log('📄 Apertura modal con URL:', signedData.signedUrl)
+        setPdfViewerUrl(signedData.signedUrl)
+        setPdfViewerTitle(`Fattura ${fattura.numero_fattura}`)
+        setPdfViewerOpen(true)
+        return
+      }
+      
+      alert('Impossibile generare il link per il download')
+    } catch (err) {
+      console.error('Errore download fattura:', err)
+      alert('Errore nel download della fattura')
+    }
+  }
+
+  // Helper per badge stato ticket
   const getStatoBadge = (stato) => {
     const badges = {
-      aperto: 'bg-blue-100 text-blue-800 border-blue-200',
-      assegnato: 'bg-purple-100 text-purple-800 border-purple-200',
-      in_lavorazione: 'bg-amber-100 text-amber-800 border-amber-200',
-      in_attesa_cliente: 'bg-gray-100 text-gray-800 border-gray-200',
-      risolto: 'bg-green-100 text-green-800 border-green-200',
-      chiuso: 'bg-gray-100 text-gray-600 border-gray-200'
+      aperto: 'bg-blue-100 text-blue-800',
+      assegnato: 'bg-purple-100 text-purple-800',
+      in_lavorazione: 'bg-amber-100 text-amber-800',
+      in_attesa_cliente: 'bg-gray-100 text-gray-800',
+      in_attesa_parti: 'bg-orange-100 text-orange-800',
+      risolto: 'bg-green-100 text-green-800',
+      chiuso: 'bg-gray-100 text-gray-600',
+      annullato: 'bg-red-100 text-red-800'
     }
     return badges[stato] || 'bg-gray-100 text-gray-800'
   }
 
-  const getPrioritaBadge = (priorita) => {
-    const badges = {
-      bassa: 'bg-slate-100 text-slate-800',
-      media: 'bg-yellow-100 text-yellow-800',
-      alta: 'bg-red-100 text-red-800',
-      critica: 'bg-red-600 text-white'
-    }
-    return badges[priorita] || 'bg-gray-100 text-gray-800'
-  }
-
   const getStatoLabel = (stato) => {
     const labels = {
-      'aperto': 'Aperto',
-      'assegnato': 'Assegnato',
-      'in_lavorazione': 'In Lavorazione',
-      'in_attesa_cliente': 'Attesa Cliente',
-      'risolto': 'Risolto',
-      'chiuso': 'Chiuso'
+      aperto: 'Aperto',
+      assegnato: 'Assegnato',
+      in_lavorazione: 'In Lavorazione',
+      in_attesa_cliente: 'In Attesa',
+      in_attesa_parti: 'Attesa Parti',
+      risolto: 'Risolto',
+      chiuso: 'Chiuso',
+      annullato: 'Annullato'
     }
     return labels[stato] || stato
   }
 
-  if (loading) {
+  // Helper per badge stato fattura
+  const getStatoFatturaBadge = (stato) => {
+    const badges = {
+      emessa: 'bg-blue-100 text-blue-800',
+      inviata: 'bg-purple-100 text-purple-800',
+      pagata: 'bg-green-100 text-green-800',
+      scaduta: 'bg-red-100 text-red-800',
+      annullata: 'bg-gray-100 text-gray-600'
+    }
+    return badges[stato] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getStatoFatturaLabel = (stato) => {
+    const labels = {
+      emessa: 'Emessa',
+      inviata: 'Inviata',
+      pagata: 'Pagata',
+      scaduta: 'Scaduta',
+      annullata: 'Annullata'
+    }
+    return labels[stato] || stato
+  }
+
+  // Loading state - ✅ FIX: Solo se non abbiamo dati
+  if (loading && !dashboardData.cliente) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Caricamento...</p>
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Caricamento dashboard...</p>
         </div>
       </div>
     )
   }
 
-  if (!cliente) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Cliente non trovato</h2>
-          <Link href="/clienti" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
-            ← Torna ai clienti
-          </Link>
-        </div>
-      </div>
-    )
+
+  if (!user) {
+    return null
   }
+
+  const { cliente, referenti, macchinari, documenti, contratti, tickets, fatture } = dashboardData
+
+  // Calcola ticket aperti
+  const ticketAperti = tickets.filter(t => 
+    !['chiuso', 'risolto', 'annullato'].includes(t.stato)
+  ).length
+
+  // Calcola fatture non pagate
+  const fattureNonPagate = fatture.filter(f => 
+    f.stato !== 'pagata' && f.stato !== 'annullata'
+  ).length
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <Link 
-            href="/clienti"
-            className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
-          >
-            <ArrowLeft size={20} />
-            <span>Torna ai Clienti</span>
-          </Link>
-          
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                {cliente.ragione_sociale}
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">Codice Cliente: {cliente.codice_cliente}</p>
-            </div>
-            <div className="flex gap-3">
-              {cliente.attivo ? (
-                <span className="px-4 py-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-full font-medium">
-                  ✓ Attivo
-                </span>
-              ) : (
-                <span className="px-4 py-2 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 rounded-full font-medium">
-                  Inattivo
-                </span>
-              )}
-              <Link
-                href={`/ticket/nuovo?cliente=${cliente.id}`}
-                className="px-4 py-2 bg-blue-600 text-white rounded-full font-medium hover:bg-blue-700 transition-colors"
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="sticky top-0 bg-white shadow-sm z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo + Back */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push('/portal')}
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Torna al Menu"
               >
-                + Nuovo Ticket
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Macchinari</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{macchinari.length}</p>
-              </div>
-              <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-lg">
-                <HardDrive className="text-green-600 dark:text-green-400" size={24} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Ticket Totali</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{tickets.length}</p>
-              </div>
-              <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-lg">
-                <Ticket className="text-blue-600 dark:text-blue-400" size={24} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Ticket Aperti</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {tickets.filter(t => ['aperto', 'assegnato', 'in_lavorazione'].includes(t.stato)).length}
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              
+              <Image 
+                src="/Logo.webp" 
+                alt="OdontoService" 
+                width={100}
+                height={75}
+                className="object-contain"
+              />
+              <div className="hidden sm:block h-8 w-px bg-gray-300" />
+              <div className="hidden sm:block">
+                <h1 className="text-lg font-bold text-gray-900">
+                  {cliente?.ragione_sociale || 'Dashboard Cliente'}
+                </h1>
+                <p className="text-xs text-gray-500">
+                  Portale Assistenza Tecnica
                 </p>
               </div>
-              <div className="bg-amber-100 dark:bg-amber-900/30 p-3 rounded-lg">
-                <Clock className="text-amber-600 dark:text-amber-400" size={24} />
+            </div>
+
+            {/* User menu + SedePicker */}
+            <div className="flex items-center gap-2 sm:gap-4">
+              {/* ✅ FIX: SedePicker ORA VISIBILE SU MOBILE */}
+              {isMultiSede && (
+                <SedePicker className="max-w-[130px] sm:max-w-[200px]" />
+              )}
+              <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                  {user?.email?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{user?.email}</p>
+                  <p className="text-xs text-gray-500">Cliente</p>
+                </div>
               </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Esci"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
+      </header>
 
-        {/* Info Cliente */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Contatti */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Contatti</h2>
-            <div className="space-y-3">
-              {cliente.telefono_principale && (
-                <div className="flex items-center gap-3">
-                  <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
-                    <Phone className="text-blue-600 dark:text-blue-400" size={18} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Telefono Principale</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{cliente.telefono_principale}</p>
-                  </div>
-                </div>
-              )}
-              {cliente.email_riparazioni && (
-                <div className="flex items-center gap-3">
-                  <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-lg">
-                    <Mail className="text-green-600 dark:text-green-400" size={18} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Email Riparazioni</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{cliente.email_riparazioni}</p>
-                  </div>
-                </div>
-              )}
-            </div>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Hero Banner */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-8 mb-8 text-white">
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <h2 className="text-3xl font-bold">
+              Benvenuto, {cliente?.ragione_sociale}!
+            </h2>
+            {/* ✅ MULTI-SEDE: Badge sede corrente */}
+            {isMultiSede && sedeAttiva && (
+              <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-medium">
+                📍 {sedeAttiva.citta} ({sediCollegate.length} sedi)
+              </span>
+            )}
           </div>
-
-          {/* Indirizzo */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Indirizzo</h2>
-            <div className="flex items-start gap-3">
-              <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg">
-                <MapPin className="text-purple-600 dark:text-purple-400" size={18} />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Sede Operativa</p>
-                <p className="font-medium text-gray-900 dark:text-white">{cliente.indirizzo}</p>
-                <p className="text-gray-600 dark:text-gray-400">{cliente.cap} {cliente.citta} ({cliente.provincia})</p>
-              </div>
-            </div>
+          <p className="text-blue-100 mb-6">
+            {isMultiSede && sedeAttiva
+              ? `Stai visualizzando: ${sedeAttiva.indirizzo || sedeAttiva.citta} (${sedeAttiva.codice_cliente})`
+              : 'Gestisci la tua assistenza tecnica in un unico posto'
+            }
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/portal/ticket/nuovo"
+              className="flex items-center gap-2 px-5 py-2.5 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition-colors font-medium"
+            >
+              <Ticket className="w-5 h-5" />
+              Apri Ticket
+            </Link>
+            <Link
+              href="/portal/contratti"
+              className="flex items-center gap-2 px-5 py-2.5 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors font-medium"
+            >
+              <FileText className="w-5 h-5" />
+              Vedi Contratti
+            </Link>
           </div>
         </div>
 
-        {/* Tabs: Macchinari, Contratti, Ticket, Infrastruttura */}
-        <div className="mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-t-xl shadow-sm border border-gray-200 dark:border-gray-700 border-b-0">
-            <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto scrollbar-hide">
-              <button
-                onClick={() => setActiveTab('macchinari')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'macchinari'
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <HardDrive size={18} />
-                  <span>Macchinari ({macchinari.length})</span>
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('contratti')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'contratti'
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <FileText size={18} />
-                  <span>Contratti ({contratti.length})</span>
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('ticket')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'ticket'
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Ticket size={18} />
-                  <span>Ticket ({tickets.length})</span>
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('infrastruttura')}
-                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'infrastruttura'
-                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Settings size={18} />
-                  <span>Infrastruttura</span>
-                </div>
-              </button>
+        {/* KPI Cards CLICCABILI - 6 CARDS */}
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+          
+          {/* Card 1: Dati Azienda */}
+          <button
+            onClick={() => setActiveSection('overview')}
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-blue-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+              activeSection === 'overview' ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-blue-600" />
+              </div>
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
             </div>
-          </div>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Dati Azienda</h3>
+            <p className="text-xl font-bold text-gray-900">Completi</p>
+          </button>
 
-          {/* Content */}
-          <div className="bg-white dark:bg-gray-800 rounded-b-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            {/* Tab Macchinari */}
-            {activeTab === 'macchinari' && (
-  <>
-    {/* Header con pulsante Libro Macchine */}
-    {macchinari.length > 0 && (
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {macchinari.length} macchinari installati
-        </p>
-        <LibroMacchinePDF 
-          clienteId={cliente?.id}
-          clienteNome={cliente?.ragione_sociale}
-          sedeNome={cliente?.citta}
-        />
-      </div>
-    )}
-    
-    {macchinari.length > 0 ? (
-            
-            
+          {/* Card 2: Referenti */}
+          <button
+            onClick={() => setActiveSection('referenti')}
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-green-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+              activeSection === 'referenti' ? 'ring-2 ring-green-500 ring-offset-2' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Users className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Referenti</h3>
+            <p className="text-xl font-bold text-gray-900">{referenti.length}</p>
+          </button>
+
+          {/* Card 3: Macchinari */}
+          <button
+            onClick={() => setActiveSection('macchinari')}
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-amber-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+              activeSection === 'macchinari' ? 'ring-2 ring-amber-500 ring-offset-2' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                <Wrench className="w-5 h-5 text-amber-600" />
+              </div>
+              {/* ✅ Badge per macchinari con ticket aperti */}
+              {macchinari.filter(m => m.ticketAperti > 0).length > 0 && (
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                  {macchinari.filter(m => m.ticketAperti > 0).length}
+                </span>
+              )}
+            </div>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Macchinari</h3>
+            <p className="text-xl font-bold text-gray-900">{macchinari.length}</p>
+          </button>
+
+          {/* Card 4: Documenti */}
+          <button
+            onClick={() => setActiveSection('documenti')}
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-purple-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+              activeSection === 'documenti' ? 'ring-2 ring-purple-500 ring-offset-2' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <FileText className="w-5 h-5 text-purple-600" />
+              </div>
+            </div>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Documenti</h3>
+            <p className="text-xl font-bold text-gray-900">{documenti.length}</p>
+          </button>
+
+          {/* Card 5: Ticket */}
+          <button
+            onClick={() => setActiveSection('tickets')}
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-red-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+              activeSection === 'tickets' ? 'ring-2 ring-red-500 ring-offset-2' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <Ticket className="w-5 h-5 text-red-600" />
+              </div>
+              {ticketAperti > 0 && (
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                  {ticketAperti}
+                </span>
+              )}
+            </div>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Ticket</h3>
+            <p className="text-xl font-bold text-gray-900">{tickets.length}</p>
+          </button>
+
+          {/* Card 6: Fatture */}
+          <button
+            onClick={() => setActiveSection('fatture')}
+            className={`bg-white rounded-xl shadow-sm p-5 border-l-4 border-emerald-500 text-left transition-all hover:shadow-md hover:scale-[1.02] ${
+              activeSection === 'fatture' ? 'ring-2 ring-emerald-500 ring-offset-2' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-emerald-600" />
+              </div>
+              {fattureNonPagate > 0 && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+                  {fattureNonPagate}
+                </span>
+              )}
+            </div>
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Fatture</h3>
+            <p className="text-xl font-bold text-gray-900">{fatture.length}</p>
+          </button>
+        </div>
+
+        {/* Contenuto Dinamico basato su activeSection */}
+        <div className="space-y-6">
+          
+          {/* OVERVIEW SECTION */}
+          {activeSection === 'overview' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Dati Aziendali */}
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Dati Aziendali
+                  </h3>
+                  <button className="text-blue-600 hover:text-blue-700">
+                    <Edit className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Ragione Sociale</p>
+                    <p className="font-medium text-gray-900">{cliente?.ragione_sociale || '-'}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">P.IVA</p>
+                      <p className="font-medium text-gray-900">{cliente?.partita_iva || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Codice Fiscale</p>
+                      <p className="font-medium text-gray-900">{cliente?.codice_fiscale || '-'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 flex items-center gap-2">
+                      <MapPin className="w-4 h-4" /> Indirizzo
+                    </p>
+                    <p className="font-medium text-gray-900">
+                      {cliente?.via || '-'}<br />
+                      {cliente?.cap} {cliente?.citta} ({cliente?.provincia})
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600 flex items-center gap-2">
+                        <Phone className="w-4 h-4" /> Telefono
+                      </p>
+                      <p className="font-medium text-gray-900">{cliente?.telefono_principale || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 flex items-center gap-2">
+                        <Mail className="w-4 h-4" /> Email
+                      </p>
+                      <p className="font-medium text-gray-900">{cliente?.email_principale || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contratti Attivi */}
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Contratti Attivi
+                  </h3>
+                  <Shield className="w-5 h-5 text-green-500" />
+                </div>
+                {contratti.length > 0 ? (
                   <div className="space-y-4">
-                     {macchinari.map((macchinario) => (
-                      <div 
-                        key={macchinario.id}
-                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-3">
+                    {contratti.slice(0, 3).map((contratto) => (
+                      <div key={contratto.id} className="p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
                           <div>
-                            <h3 className="font-bold text-gray-900 dark:text-white">
-                              {macchinario.tipo_macchinario}
-                            </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {macchinario.marca} - {macchinario.modello}
+                            <p className="font-medium text-gray-900">
+                              {contratto.nome_contratto || contratto.tipo_contratto || `Contratto ${contratto.num_contratto}`}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {contratto.tipo_contratto}
                             </p>
                           </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            macchinario.stato === 'attivo' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                          }`}>
-                            {macchinario.stato.toUpperCase()}
+                          <span className={`
+                            px-2 py-1 text-xs font-medium rounded-full
+                            ${contratto.stato === 'attivo' 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-gray-100 text-gray-700'
+                            }
+                          `}>
+                            {contratto.stato}
                           </span>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-200">
                           <div>
-                            <span className="text-gray-500 dark:text-gray-400">Matricola:</span>
-                            <p className="font-mono text-gray-900 dark:text-white">{macchinario.numero_seriale}</p>
+                            <p className="text-xs text-gray-500">Ore Incluse</p>
+                            <p className="text-sm font-semibold text-gray-900">{contratto.ore_incluse}h</p>
                           </div>
-                          {macchinario.data_installazione && (
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400">Installazione:</span>
-                              <p className="text-gray-900 dark:text-white">
-                                {new Date(macchinario.data_installazione).toLocaleDateString('it-IT')}
-                              </p>
-                            </div>
-                          )}
+                          <div>
+                            <p className="text-xs text-gray-500">Ore Rimanenti</p>
+                            <p className="text-sm font-semibold text-green-600">{contratto.ore_rimanenti}h</p>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <HardDrive className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                      Nessun macchinario
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Questo cliente non ha ancora macchinari registrati
-                    </p>
+                  <div className="text-center py-8">
+                    <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Nessun contratto attivo</p>
                   </div>
                 )}
-              </>
-            )}
+              </div>
 
-            {/* Tab Contratti */}
-            {activeTab === 'contratti' && (
-              <>
-                {contratti.length > 0 ? (
-                  <div className="space-y-4">
-                    {contratti.map((contratto) => {
-                      const percentualeUtilizzo = contratto.ore_incluse > 0 
-                        ? (contratto.ore_utilizzate / contratto.ore_incluse) * 100 
-                        : 0
-                      const oreRimanenti = contratto.ore_rimanenti || 0
-                      const isInScadenza = contratto.data_scadenza && 
-                        new Date(contratto.data_scadenza) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              {/* Ticket Recenti - Anteprima */}
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Ticket Recenti
+                  </h3>
+                  <button
+                    onClick={() => setActiveSection('tickets')}
+                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                  >
+                    Vedi tutti
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                {tickets.length > 0 ? (
+                  <div className="space-y-3">
+                    {tickets.slice(0, 3).map((ticket) => (
+                      <Link 
+                        key={ticket.id} 
+                        href={`/portal/ticket/${ticket.id}`}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {ticket.oggetto}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            #{ticket.numero_ticket} • {new Date(ticket.data_apertura).toLocaleDateString('it-IT')}
+                          </p>
+                        </div>
+                        <span className={`
+                          ml-3 px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap
+                          ${getStatoBadge(ticket.stato)}
+                        `}>
+                          {getStatoLabel(ticket.stato)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Ticket className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Nessun ticket</p>
+                  </div>
+                )}
+              </div>
 
+              {/* ✅ NUOVO: Preview Macchinari nell'Overview */}
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Macchinari Installati
+                  </h3>
+                  <button
+                    onClick={() => setActiveSection('macchinari')}
+                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                  >
+                    Vedi tutti
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                {macchinari.length > 0 ? (
+                  <div className="space-y-3">
+                    {macchinari.slice(0, 3).map((macch) => {
+                      const scadenza = getScadenzaManutenzione(macch)
                       return (
                         <div 
-                          key={contratto.id}
-                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                          key={macch.id} 
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                         >
-                          {/* Header Contratto */}
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">
-                                  {contratto.nome_contratto}
-                                </h3>
-                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatoContrattoColor(contratto.stato)}`}>
-                                  {contratto.stato.toUpperCase()}
-                                </span>
-                                {isInScadenza && contratto.stato === 'attivo' && (
-                                  <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
-                                    ⚠️ IN SCADENZA
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Contratto #{contratto.num_contratto} - {contratto.tipo_contratto}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                              <Wrench className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {macch.tipo_macchinario || 'N/D'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {macch.marca && `${macch.marca} `}{macch.modello || ''} • SN: {macch.numero_seriale || 'N/D'}
                               </p>
                             </div>
-
-                            {/* Pulsanti Azioni */}
-                            <div className="flex items-center gap-2 ml-4">
-                              <button
-                                onClick={() => handleContrattoClick(contratto)}
-                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                                title="Visualizza"
-                              >
-                                <Calendar size={18} />
-                              </button>
-                              <button
-                                onClick={() => handleEditContratto(contratto)}
-                                className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-colors"
-                                title="Modifica"
-                              >
-                                <Edit2 size={18} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteContratto(contratto)}
-                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                title="Elimina"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            </div>
                           </div>
-
-                          {/* Info Contratto */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Data Inizio</span>
-                              <span className="text-gray-900 dark:text-white font-medium">
-                                {new Date(contratto.data_contratto).toLocaleDateString('it-IT')}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Data Scadenza</span>
-                              <span className={`font-medium ${
-                                isInScadenza && contratto.stato === 'attivo'
-                                  ? 'text-orange-600 dark:text-orange-400'
-                                  : 'text-gray-900 dark:text-white'
-                              }`}>
-                                {new Date(contratto.data_scadenza).toLocaleDateString('it-IT')}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Valore Contratto</span>
-                              <span className="text-gray-900 dark:text-white font-medium">
-                                €{parseFloat(contratto.valore_contratto || 0).toFixed(2)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Canone</span>
-                              <span className="text-gray-900 dark:text-white font-medium">
-                                €{parseFloat(contratto.canone_mensile || 0).toFixed(2)}/mese
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Progress Bar Ore */}
-                          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Ore Disponibili
-                              </span>
-                              <span className={`text-sm font-bold ${
-                                percentualeUtilizzo >= 90 
-                                  ? 'text-red-600 dark:text-red-400' 
-                                  : percentualeUtilizzo >= 75 
-                                  ? 'text-orange-600 dark:text-orange-400' 
-                                  : 'text-green-600 dark:text-green-400'
-                              }`}>
-                                {oreRimanenti.toFixed(1)}h / {parseFloat(contratto.ore_incluse || 0).toFixed(1)}h
-                              </span>
-                            </div>
-                            
-                            {/* Progress Bar */}
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-2">
-                              <div
-                                className={`h-3 rounded-full transition-all ${
-                                  percentualeUtilizzo >= 90
-                                    ? 'bg-red-500'
-                                    : percentualeUtilizzo >= 75
-                                    ? 'bg-orange-500'
-                                    : 'bg-green-500'
-                                }`}
-                                style={{ width: `${Math.max(0, Math.min(100, 100 - percentualeUtilizzo))}%` }}
-                              ></div>
-                            </div>
-
-                            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                              <span>{parseFloat(contratto.ore_utilizzate || 0).toFixed(1)}h utilizzate</span>
-                              <span>{percentualeUtilizzo.toFixed(0)}% consumato</span>
-                            </div>
-                          </div>
-
-                          {/* Note Contratto */}
-                          {contratto.note && (
-                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                <span className="font-medium">Note:</span> {contratto.note}
-                              </p>
-                            </div>
+                          {/* Badge ticket */}
+                          {macch.ticketAperti > 0 && (
+                            <button
+                              onClick={() => openTicketModal(macch)}
+                              className="px-2.5 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full hover:bg-red-200 transition-colors"
+                            >
+                              {macch.ticketAperti} ticket
+                            </button>
                           )}
                         </div>
                       )
                     })}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <FileText className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                      Nessun contratto
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                      Questo cliente non ha ancora contratti registrati
-                    </p>
-                    <button
-                      className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                      <Plus size={18} />
-                      Crea Contratto
-                    </button>
+                  <div className="text-center py-8">
+                    <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Nessun macchinario registrato</p>
                   </div>
                 )}
-              </>
-            )}
+              </div>
+            </div>
+          )}
 
-            {/* Tab Ticket */}
-            {activeTab === 'ticket' && (
-              <>
-                {tickets.length > 0 ? (
-                  <>
-                    {/* Header con pulsante Nuovo Ticket */}
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Tutti i Ticket ({tickets.length})
-                      </h3>
-                      <Link
-                        href={`/ticket/nuovo?cliente=${cliente.id}`}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-                      >
-                        <Plus size={16} />
-                        Nuovo Ticket
-                      </Link>
-                    </div>
+          {/* TICKETS SECTION */}
+          {activeSection === 'tickets' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveSection('overview')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    I Miei Ticket
+                  </h3>
+                </div>
+                <Link
+                  href="/portal/ticket/nuovo"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nuovo Ticket
+                </Link>
+              </div>
+              {tickets.length > 0 ? (
+                <div className="space-y-3">
+                  {tickets.map((ticket) => (
+                    <Link 
+                      key={ticket.id}
+                      href={`/portal/ticket/${ticket.id}`}
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-sm font-mono text-gray-500">
+                            #{ticket.numero_ticket}
+                          </span>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
+                            {getStatoLabel(ticket.stato)}
+                          </span>
+                        </div>
+                        <h4 className="font-medium text-gray-900 mb-1">
+                          {ticket.oggetto}
+                        </h4>
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {ticket.descrizione}
+                        </p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(ticket.data_apertura).toLocaleDateString('it-IT')}
+                          </span>
+                          {ticket.categoria && (
+                            <span className="capitalize">{ticket.categoria.replace('_', ' ')}</span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 ml-4" />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Ticket className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">Nessun ticket presente</p>
+                  <Link
+                    href="/portal/ticket/nuovo"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Apri il primo ticket
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
 
-                    <div className="space-y-4">
-                      {tickets.map((ticket) => (
-                      <div 
-                        key={ticket.id}
-                        onClick={() => handleTicketClick(ticket, null)}
-                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleTicketClick(ticket, e)
-                                }}
-                                className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors"
-                              >
-                                {ticket.numero_ticket}
-                              </button>
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getPrioritaBadge(ticket.priorita)}`}>
-                                {ticket.priorita?.toUpperCase()}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatoBadge(ticket.stato)}`}>
-                                {getStatoLabel(ticket.stato)}
-                              </span>
-                            </div>
-                            
-                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">
-                              {ticket.oggetto}
-                            </h4>
-                            
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
-                              {ticket.descrizione}
-                            </p>
-
-                            {ticket.macchinari && (
-                              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                <HardDrive size={14} />
-                                <span>{ticket.macchinari.tipo_macchinario} (SN: {ticket.macchinari.numero_seriale})</span>
-                              </div>
-                            )}
+          {/* REFERENTI SECTION */}
+          {activeSection === 'referenti' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveSection('overview')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Referenti Aziendali
+                  </h3>
+                </div>
+                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                  <Plus className="w-4 h-4" />
+                  Aggiungi Referente
+                </button>
+              </div>
+              {referenti.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {referenti.map((ref) => (
+                    <div key={ref.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-green-600 font-bold text-lg">
+                              {ref.nome?.charAt(0)}{ref.cognome?.charAt(0)}
+                            </span>
                           </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">
+                              {ref.nome} {ref.cognome}
+                            </h4>
+                            <p className="text-sm text-gray-600">{ref.ruolo}</p>
+                          </div>
+                        </div>
+                        {ref.principale && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                            Principale
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        {ref.email && (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Mail className="w-4 h-4" />
+                            <a href={`mailto:${ref.email}`} className="hover:text-blue-600">
+                              {ref.email}
+                            </a>
+                          </div>
+                        )}
+                        {ref.telefono && (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Phone className="w-4 h-4" />
+                            <a href={`tel:${ref.telefono}`} className="hover:text-blue-600">
+                              {ref.telefono}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">Nessun referente registrato</p>
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Aggiungi il primo referente
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
-                          <div className="flex items-start gap-3 ml-4">
-                            <div className="text-right text-xs text-gray-500 dark:text-gray-400">
-                              <div className="flex items-center gap-1 mb-1">
-                                <Clock size={12} />
-                                <span>{new Date(ticket.data_apertura).toLocaleDateString('it-IT')}</span>
-                              </div>
-                              <span>{new Date(ticket.data_apertura).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
+          {/* ✅ MACCHINARI SECTION - Versione Tabellare Completa */}
+          {/* ============================================
+    SEZIONE MACCHINARI - VERSIONE CON RICERCA E UBICAZIONE
+    Sostituisce il blocco: {activeSection === 'macchinari' && (...)}
+    ============================================ */}
+
+{activeSection === 'macchinari' && (
+  <div className="bg-white rounded-xl shadow-sm p-6">
+    {(() => {
+      // Lista ubicazioni uniche
+      const ubicazioniUniche = [...new Set(
+        macchinari
+          .map(m => m.ubicazione_specifica)
+          .filter(Boolean)
+      )].sort()
+      
+      // Filtra macchinari
+      const macchinariFiltered = macchinari.filter(macch => {
+        // Filtro ricerca testo
+        const searchLower = searchMacchinari.toLowerCase()
+        const matchSearch = !searchMacchinari || 
+          (macch.tipo_macchinario || '').toLowerCase().includes(searchLower) ||
+          (macch.marca || '').toLowerCase().includes(searchLower) ||
+          (macch.modello || '').toLowerCase().includes(searchLower) ||
+          (macch.numero_seriale || '').toLowerCase().includes(searchLower) ||
+          (macch.ubicazione_specifica || '').toLowerCase().includes(searchLower)
+        
+        // Filtro ubicazione
+        const matchUbicazione = !filtroUbicazione || 
+          macch.ubicazione_specifica === filtroUbicazione
+        
+        return matchSearch && matchUbicazione
+      })
+      
+      // Ordina per tipo macchinario alfabetico
+      const macchinariSorted = [...macchinariFiltered].sort((a, b) => 
+        (a.tipo_macchinario || '').localeCompare(b.tipo_macchinario || '')
+      )
+      
+      return (
+        <>
+          {/* Header con ricerca */}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setActiveSection('overview')}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-600" />
+                </button>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Macchinari Installati
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {macchinariFiltered.length === macchinari.length 
+                      ? `${macchinari.length} macchinari registrati`
+                      : `${macchinariFiltered.length} di ${macchinari.length} macchinari`
+                    }
+                  </p>
+                </div>
+              </div>
+              
+              {/* Pulsante Stampa Libro Macchine */}
+              <LibroMacchinePDF 
+                clienteId={sedeAttiva?.id || customerProfile?.cliente_id}
+                clienteNome={sedeAttiva?.ragione_sociale || dashboardData.cliente?.ragione_sociale}
+                sedeNome={sedeAttiva?.citta}
+              />
+            </div>
+            
+            {/* Barra ricerca e filtri */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Campo ricerca */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cerca per tipo, marca, modello, matricola..."
+                  value={searchMacchinari}
+                  onChange={(e) => setSearchMacchinari(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                {searchMacchinari && (
+                  <button
+                    onClick={() => setSearchMacchinari('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              
+              {/* Filtro ubicazione */}
+              {ubicazioniUniche.length > 0 && (
+                <select
+                  value={filtroUbicazione}
+                  onChange={(e) => setFiltroUbicazione(e.target.value)}
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white min-w-[200px]"
+                >
+                  <option value="">🏠 Tutte le ubicazioni</option>
+                  {ubicazioniUniche.map(ubi => (
+                    <option key={ubi} value={ubi}>📍 {ubi}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          {macchinariSorted.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Tipo Apparecchiatura
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Matricola
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Installazione
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Ubicazione
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Scad. Manutenzione
+                    </th>
+                    <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Ticket
+                    </th>
+                    <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Azioni
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {macchinariSorted.map((macch) => {
+                    const scadenza = getScadenzaManutenzione(macch)
+                    const ScadenzaIcon = scadenza.icon
+                    
+                    return (
+                      <tr 
+                        key={macch.id} 
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        {/* Tipo Apparecchiatura */}
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Wrench className="w-5 h-5 text-amber-600" />
                             </div>
-                            
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {macch.tipo_macchinario || 'N/D'}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {macch.marca && `${macch.marca} `}{macch.modello || ''}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        
+                        {/* Matricola */}
+                        <td className="py-4 px-4">
+                          <span className="font-mono text-sm text-gray-700">
+                            {macch.numero_seriale || 'N/D'}
+                          </span>
+                          {macch.numero_libro && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              Libro: {macch.numero_libro}
+                            </p>
+                          )}
+                        </td>
+                        
+                        {/* Data Installazione */}
+                        <td className="py-4 px-4">
+                          {macch.data_installazione ? (
+                            <span className="text-sm text-gray-700">
+                              {new Date(macch.data_installazione).toLocaleDateString('it-IT', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                              })}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">N/D</span>
+                          )}
+                        </td>
+                        
+                        {/* Ubicazione */}
+                        <td className="py-4 px-4">
+                          {macch.ubicazione_specifica ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-sm rounded-md font-medium">
+                              <MapPin className="w-3.5 h-3.5" />
+                              {macch.ubicazione_specifica}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        
+                        {/* Scadenza Manutenzione */}
+                        <td className="py-4 px-4">
+                          {scadenza.status === 'unknown' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium text-gray-400 bg-gray-100">
+                              Scaduto
+                            </span>
+                          ) : (
+                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${scadenza.className}`}>
+                              {ScadenzaIcon && <ScadenzaIcon className="w-3.5 h-3.5" />}
+                              {scadenza.label}
+                            </div>
+                          )}
+                        </td>
+                        
+                        {/* Ticket Badge Cliccabile */}
+                        <td className="py-4 px-4 text-center">
+                          {macch.ticketAperti > 0 ? (
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleTicketClick(ticket, e)
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-sm font-medium text-xs"
+                              onClick={() => openTicketModal(macch)}
+                              className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-red-100 text-red-700 font-bold text-sm rounded-full hover:bg-red-200 transition-colors"
+                              title={`${macch.ticketAperti} ticket aperti - Clicca per vedere`}
                             >
-                              <Settings size={14} />
-                              <span>Gestisci</span>
+                              {macch.ticketAperti}
                             </button>
+                          ) : macch.ticketTotali > 0 ? (
+                            <button
+                              onClick={() => openTicketModal(macch)}
+                              className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-100 text-gray-500 font-medium text-sm rounded-full hover:bg-gray-200 transition-colors"
+                              title={`${macch.ticketTotali} ticket totali - Clicca per vedere`}
+                            >
+                              {macch.ticketTotali}
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 bg-gray-50 text-gray-400 text-sm rounded-full">
+                              0
+                            </span>
+                          )}
+                        </td>
+                        
+                        {/* Pulsante Nuovo Ticket */}
+                        <td className="py-4 px-4 text-center">
+                          <Link
+                            href={`/portal/ticket/nuovo?macchinario=${macch.id}`}
+                            className="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            title={`Apri nuovo ticket per ${macch.tipo_macchinario || 'questo macchinario'}`}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : macchinari.length > 0 ? (
+            // Nessun risultato dalla ricerca
+            <div className="text-center py-12">
+              <Search className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Nessun risultato
+              </h3>
+              <p className="text-gray-500 mb-4">
+                Nessun macchinario corrisponde ai criteri di ricerca
+              </p>
+              <button
+                onClick={() => { setSearchMacchinari(''); setFiltroUbicazione(''); }}
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Cancella filtri
+              </button>
+            </div>
+          ) : (
+            // Nessun macchinario registrato
+            <div className="text-center py-12">
+              <Wrench className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Nessun macchinario
+              </h3>
+              <p className="text-gray-500">
+                Non ci sono ancora macchinari registrati per questa sede
+              </p>
+            </div>
+          )}
+        </>
+      )
+    })()}
+  </div>
+
+{/* FATTURE SECTION */}
+          {activeSection === 'fatture' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveSection('overview')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Le Mie Fatture
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {fatture.length} fatture • {fattureNonPagate} da pagare
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {fatture.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Numero
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Data
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Descrizione
+                        </th>
+                        <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Importo
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Stato
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Azioni
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {fatture.map((fattura) => (
+                        <tr key={fattura.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="font-mono text-sm font-medium text-gray-900">
+                              {fattura.numero_fattura}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-sm text-gray-600">
+                              {new Date(fattura.data_emissione).toLocaleDateString('it-IT')}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-sm text-gray-900 line-clamp-1">
+                              {fattura.descrizione || 'Fattura servizi'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="font-semibold text-gray-900">
+                              € {(fattura.importo_totale || 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getStatoFatturaBadge(fattura.stato)}`}>
+                              {getStatoFatturaLabel(fattura.stato)}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <button
+                              onClick={() => downloadFattura(fattura)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Visualizza PDF"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Nessuna fattura presente</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* DOCUMENTI SECTION */}
+          {activeSection === 'documenti' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveSection('overview')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Documenti
+                  </h3>
+                </div>
+              </div>
+              {documenti.length > 0 ? (
+                <div className="space-y-3">
+                  {documenti.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <FileText className="w-6 h-6 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-gray-900">{doc.nome_file}</h4>
+                          <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                            <span className="capitalize">{doc.tipo}</span>
+                            <span>•</span>
+                            <span>{new Date(doc.caricato_il).toLocaleDateString('it-IT')}</span>
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  </>
-                ) : (
-                  <div className="text-center py-12">
-                    <Ticket className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                      Nessun ticket
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                      Questo cliente non ha ancora aperto ticket
-                    </p>
-                    <Link
-                      href={`/ticket/nuovo?cliente=${cliente.id}`}
-                      className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                      Crea Primo Ticket
-                    </Link>
-                  </div>
-                )}
-              </>
-            )}
+                      <div className="flex items-center gap-2">
+                        <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                          <Eye className="w-5 h-5" />
+                        </button>
+                        <button className="p-2 text-green-600 hover:bg-green-50 rounded-lg">
+                          <Download className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Nessun documento disponibile</p>
+                </div>
+              )}
+            </div>
+          )}
 
-            {/* Tab Infrastruttura */}
-            {activeTab === 'infrastruttura' && (
-              <InfrastrutturaForm clienteId={params.id} />
-            )}
+        </div>
+
+        {/* Footer Info */}
+        <div className="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-xl">
+          <div className="flex items-start gap-4">
+            <AlertCircle className="w-6 h-6 text-blue-600 flex-shrink-0" />
+            <div>
+              <h4 className="font-semibold text-blue-900 mb-2">
+                Hai bisogno di assistenza?
+              </h4>
+              <p className="text-blue-800 text-sm mb-3">
+                Il nostro team è a tua disposizione per qualsiasi necessità tecnica o amministrativa.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link 
+                  href="/portal/ticket/nuovo"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Ticket className="w-4 h-4" />
+                  Apri Ticket
+                </Link>
+                <a href="tel:+390544949554" className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium">
+                  <Phone className="w-4 h-4" />
+                  Chiama Ora
+                </a>
+                <a href="mailto:assistenza@odontoservice.it" className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium">
+                  <Mail className="w-4 h-4" />
+                  Invia Email
+                </a>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Modal Azioni Ticket */}
-      {mostraModalAzioni && ticketSelezionato && (
-        <TicketActionsModal
-          ticket={ticketSelezionato}
-          onClose={handleModalClose}
-          onUpdate={handleTicketUpdate}
-        />
+      </main>
+
+      {/* ✅ NUOVO: Modal Ticket Macchinario */}
+      {ticketModalOpen && selectedMacchinario && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Wrench className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Ticket - {selectedMacchinario.tipo_macchinario || 'Macchinario'}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {selectedMacchinario.marca && `${selectedMacchinario.marca} `}{selectedMacchinario.modello || ''} • Matr: {selectedMacchinario.numero_seriale || 'N/D'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setTicketModalOpen(false)
+                  setSelectedMacchinario(null)
+                  setMacchinarioTickets([])
+                }}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            
+            {/* Contenuto Modal */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {macchinarioTickets.length > 0 ? (
+                <div className="space-y-3">
+                  {macchinarioTickets.map((ticket) => (
+                    <Link
+                      key={ticket.id}
+                      href={`/portal/ticket/${ticket.id}`}
+                      onClick={() => setTicketModalOpen(false)}
+                      className="block p-4 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 transition-all"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-mono text-gray-500">
+                            #{ticket.numero_ticket}
+                          </span>
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatoBadge(ticket.stato)}`}>
+                            {getStatoLabel(ticket.stato)}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {new Date(ticket.data_apertura).toLocaleDateString('it-IT')}
+                        </span>
+                      </div>
+                      <h4 className="font-medium text-gray-900 mb-1">
+                        {ticket.oggetto}
+                      </h4>
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {ticket.descrizione}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Ticket className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">Nessun ticket per questo macchinario</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {macchinarioTickets.length} ticket trovati
+                </p>
+                <Link
+                  href={`/portal/ticket/nuovo?macchinario=${selectedMacchinario.id}`}
+                  onClick={() => setTicketModalOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nuovo Ticket per questo macchinario
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Modal Contratto */}
-      {mostraModalContratto && contrattoSelezionato && (
-        <ContrattoModal
-          contratto={contrattoSelezionato}
-          mode={modalMode}
-          onClose={closeModalContratto}
-          onUpdate={loadCliente}
-        />
+      {/* Modal PDF Viewer */}
+      {pdfViewerOpen && pdfViewerUrl && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Receipt className="w-5 h-5 text-emerald-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">{pdfViewerTitle}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Pulsante Download */}
+                <a
+                  href={pdfViewerUrl}
+                  download={`${pdfViewerTitle.replace(/\s+/g, '_')}.pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Scarica
+                </a>
+                {/* Pulsante Chiudi */}
+                <button
+                  onClick={() => {
+                    setPdfViewerOpen(false)
+                    setPdfViewerUrl(null)
+                    setPdfViewerTitle('')
+                  }}
+                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            </div>
+            
+            {/* PDF Viewer */}
+            <div className="flex-1 bg-gray-100">
+              <iframe
+                src={pdfViewerUrl}
+                className="w-full h-full"
+                title={pdfViewerTitle}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

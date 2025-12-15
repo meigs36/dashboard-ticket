@@ -116,6 +116,7 @@ export default function OnboardingPage() {
           // Step 2: Referenti (formatta per il wizard)
           referenti: referentiData && referentiData.length > 0
             ? referentiData.map(ref => ({
+                id: ref.id,  // ✅ IMPORTANTE: ID per poter aggiornare
                 nome: ref.nome || '',
                 cognome: ref.cognome || '',
                 ruolo: ref.ruolo || '',
@@ -135,6 +136,7 @@ export default function OnboardingPage() {
           // Step 3: Macchinari (formatta per il wizard)
           macchinari: macchinariData && macchinariData.length > 0
             ? macchinariData.map(mac => ({
+                id: mac.id,  // ✅ IMPORTANTE: ID per poter aggiornare
                 tipo: mac.tipo_macchinario || '',
                 marca: mac.marca || '',
                 modello: mac.modello || '',
@@ -203,10 +205,18 @@ export default function OnboardingPage() {
     }
     
     try {
+      // ✅ FIX: Ottieni il token di sessione per l'autorizzazione
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        throw new Error('Non autenticato')
+      }
+      
       const response = await fetch('/api/customer/onboarding/complete', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify(dataWithClienteId)
       })
