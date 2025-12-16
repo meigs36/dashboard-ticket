@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus, Search, Filter, X, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import TicketActionsModal from '@/components/TicketActionsModal'
@@ -27,6 +27,12 @@ export default function ClienteDettaglio() {
   const [mostraModalContratto, setMostraModalContratto] = useState(false)
   const [contrattoSelezionato, setContrattoSelezionato] = useState(null)
   const [modalMode, setModalMode] = useState('view') // view | edit
+
+  // ✅ NUOVO: Stati per filtri macchinari
+  const [searchMacchinari, setSearchMacchinari] = useState('')
+  const [filtroTipoMacchinario, setFiltroTipoMacchinario] = useState('tutti')
+  const [filtroContrattoManutenzione, setFiltroContrattoManutenzione] = useState('tutti')
+  const [mostraFiltriMacchinari, setMostraFiltriMacchinari] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -105,6 +111,111 @@ if (contrattiError) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ✅ NUOVO: Tipi macchinario unici per dropdown filtro
+  const tipiMacchinarioUnici = [...new Set(
+    macchinari.map(m => m.tipo_macchinario).filter(Boolean)
+  )].sort()
+
+  // ✅ Funzione per calcolare stato manutenzione (usa campo testuale contratto_manutenzione)
+  const getStatoManutenzione = (macchinario) => {
+    const contratto = macchinario.contratto_manutenzione?.toLowerCase()
+    
+    if (contratto === 'attivo') {
+      return { stato: 'attivo', label: 'Coperto', color: 'green' }
+    } else if (contratto === 'scaduto') {
+      return { stato: 'scaduto', label: 'Scaduto', color: 'red' }
+    } else {
+      return { stato: 'non_coperto', label: 'Non coperto', color: 'gray' }
+    }
+  }
+
+  // ✅ Funzione per calcolare stato garanzia (con date reali)
+  const getStatoGaranzia = (macchinario) => {
+    // Usa garanzia estesa se presente, altrimenti garanzia base
+    const dataGaranzia = macchinario.garanzia_estensione_scadenza || macchinario.garanzia_scadenza
+    
+    if (!dataGaranzia) {
+      return { stato: 'non_disponibile', label: null, color: 'gray', data: null }
+    }
+    
+    const oggi = new Date()
+    const scadenza = new Date(dataGaranzia)
+    const giorniRimanenti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24))
+    
+    if (giorniRimanenti < 0) {
+      return { stato: 'scaduta', label: `Scaduta da ${Math.abs(giorniRimanenti)}g`, color: 'red', giorni: Math.abs(giorniRimanenti), data: dataGaranzia }
+    } else if (giorniRimanenti <= 30) {
+      return { stato: 'in_scadenza', label: `Scade tra ${giorniRimanenti}g`, color: 'amber', giorni: giorniRimanenti, data: dataGaranzia }
+    } else if (giorniRimanenti <= 90) {
+      return { stato: 'attenzione', label: `${giorniRimanenti}g rimasti`, color: 'yellow', giorni: giorniRimanenti, data: dataGaranzia }
+    } else {
+      return { stato: 'attiva', label: 'Attiva', color: 'green', giorni: giorniRimanenti, data: dataGaranzia }
+    }
+  }
+
+  // ✅ NUOVO: Filtra macchinari
+  const macchinariFiltered = macchinari.filter(macchinario => {
+    // Filtro ricerca (tipo, matricola, modello, marca)
+    const searchLower = searchMacchinari.toLowerCase()
+    const matchSearch = !searchMacchinari || 
+      macchinario.tipo_macchinario?.toLowerCase().includes(searchLower) ||
+      macchinario.numero_seriale?.toLowerCase().includes(searchLower) ||
+      macchinario.modello?.toLowerCase().includes(searchLower) ||
+      macchinario.marca?.toLowerCase().includes(searchLower) ||
+      macchinario.ubicazione_specifica?.toLowerCase().includes(searchLower)
+    
+    // Filtro tipo macchinario
+    const matchTipo = filtroTipoMacchinario === 'tutti' || 
+      macchinario.tipo_macchinario === filtroTipoMacchinario
+    
+    // Filtro contratto manutenzione (basato su campo testuale)
+    let matchContratto = true
+    if (filtroContrattoManutenzione !== 'tutti') {
+      const statoMan = getStatoManutenzione(macchinario)
+      if (filtroContrattoManutenzione === 'attivo') {
+        matchContratto = statoMan.stato === 'attivo'
+      } else if (filtroContrattoManutenzione === 'scaduto') {
+        matchContratto = statoMan.stato === 'scaduto'
+      } else if (filtroContrattoManutenzione === 'non_coperto') {
+        matchContratto = statoMan.stato === 'non_coperto'
+      }
+    }
+    
+    return matchSearch && matchTipo && matchContratto
+  })
+
+  // ✅ NUOVO: Reset filtri macchinari
+  const resetFiltriMacchinari = () => {
+    setSearchMacchinari('')
+    setFiltroTipoMacchinario('tutti')
+    setFiltroContrattoManutenzione('tutti')
+  }
+
+  // ✅ Statistiche manutenzione (basate su campo testuale contratto_manutenzione)
+  const statsMacchinari = {
+    totali: macchinari.length,
+    filtrati: macchinariFiltered.length,
+    // Manutenzione (campo testuale)
+    coperti: macchinari.filter(m => m.contratto_manutenzione?.toLowerCase() === 'attivo').length,
+    scaduti: macchinari.filter(m => m.contratto_manutenzione?.toLowerCase() === 'scaduto').length,
+    nonCoperti: macchinari.filter(m => !m.contratto_manutenzione || (m.contratto_manutenzione?.toLowerCase() !== 'attivo' && m.contratto_manutenzione?.toLowerCase() !== 'scaduto')).length,
+    // Garanzia (basata su date)
+    garanziaAttiva: macchinari.filter(m => {
+      const dataGar = m.garanzia_estensione_scadenza || m.garanzia_scadenza
+      return dataGar && new Date(dataGar) > new Date()
+    }).length,
+    garanziaInScadenza: macchinari.filter(m => {
+      const dataGar = m.garanzia_estensione_scadenza || m.garanzia_scadenza
+      if (!dataGar) return false
+      const giorni = Math.ceil((new Date(dataGar) - new Date()) / (1000 * 60 * 60 * 24))
+      return giorni >= 0 && giorni <= 30
+    }).length,
+    garanziaScaduta: macchinari.filter(m => {
+      const dataGar = m.garanzia_estensione_scadenza || m.garanzia_scadenza
+      return dataGar && new Date(dataGar) < new Date()
+    }).length
   }
 
   function handleTicketClick(ticket, e) {
@@ -423,66 +534,315 @@ if (contrattiError) {
           <div className="bg-white dark:bg-gray-800 rounded-b-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             {/* Tab Macchinari */}
             {activeTab === 'macchinari' && (
-  <>
-    {/* Header con pulsante Libro Macchine */}
-    {macchinari.length > 0 && (
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {macchinari.length} macchinari installati
-        </p>
-        <LibroMacchinePDF 
-          clienteId={cliente?.id}
-          clienteNome={cliente?.ragione_sociale}
-          sedeNome={cliente?.citta}
-        />
-      </div>
-    )}
-    
-    {macchinari.length > 0 ? (
-            
-            
-                  <div className="space-y-4">
-                     {macchinari.map((macchinario) => (
-                      <div 
-                        key={macchinario.id}
-                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="font-bold text-gray-900 dark:text-white">
-                              {macchinario.tipo_macchinario}
-                            </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {macchinario.marca} - {macchinario.modello}
-                            </p>
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            macchinario.stato === 'attivo' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                          }`}>
-                            {macchinario.stato.toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-gray-500 dark:text-gray-400">Matricola:</span>
-                            <p className="font-mono text-gray-900 dark:text-white">{macchinario.numero_seriale}</p>
-                          </div>
-                          {macchinario.data_installazione && (
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400">Installazione:</span>
-                              <p className="text-gray-900 dark:text-white">
-                                {new Date(macchinario.data_installazione).toLocaleDateString('it-IT')}
-                              </p>
-                            </div>
+              <>
+                {/* ✅ NUOVO: Barra ricerca e filtri macchinari */}
+                {macchinari.length > 0 && (
+                  <div className="mb-6 space-y-4">
+                    {/* Header con conteggio e Libro Macchine */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {macchinariFiltered.length === macchinari.length 
+                            ? `${macchinari.length} macchinari installati`
+                            : `${macchinariFiltered.length} di ${macchinari.length} macchinari`
+                          }
+                        </p>
+                        {/* Badge statistiche rapide - Manutenzione */}
+                        <div className="hidden md:flex items-center gap-2 flex-wrap">
+                          {statsMacchinari.coperti > 0 && (
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full text-xs">
+                              🛡️ {statsMacchinari.coperti} man. attiva
+                            </span>
+                          )}
+                          {statsMacchinari.scaduti > 0 && (
+                            <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs">
+                              ❌ {statsMacchinari.scaduti} man. scaduta
+                            </span>
+                          )}
+                          {/* Badge Garanzia */}
+                          {statsMacchinari.garanziaInScadenza > 0 && (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full text-xs animate-pulse">
+                              ⚠️ {statsMacchinari.garanziaInScadenza} gar. in scadenza
+                            </span>
                           )}
                         </div>
                       </div>
-                    ))}
+                      <LibroMacchinePDF 
+                        clienteId={cliente?.id}
+                        clienteNome={cliente?.ragione_sociale}
+                        sedeNome={cliente?.citta}
+                      />
+                    </div>
+
+                    {/* Barra ricerca + pulsante filtri */}
+                    <div className="flex flex-col md:flex-row gap-3">
+                      {/* Campo ricerca */}
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          placeholder="Cerca per tipo, matricola, modello, marca, ubicazione..."
+                          value={searchMacchinari}
+                          onChange={(e) => setSearchMacchinari(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                        />
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                        {searchMacchinari && (
+                          <button 
+                            onClick={() => setSearchMacchinari('')}
+                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                          >
+                            <X size={18} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Pulsante filtri */}
+                      <button 
+                        onClick={() => setMostraFiltriMacchinari(!mostraFiltriMacchinari)}
+                        className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg transition-colors ${
+                          mostraFiltriMacchinari || filtroTipoMacchinario !== 'tutti' || filtroContrattoManutenzione !== 'tutti'
+                            ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-400' 
+                            : 'border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        <Filter size={18} />
+                        <span>Filtri</span>
+                        {(filtroTipoMacchinario !== 'tutti' || filtroContrattoManutenzione !== 'tutti') && (
+                          <span className="px-1.5 py-0.5 bg-blue-600 text-white rounded-full text-xs">
+                            {(filtroTipoMacchinario !== 'tutti' ? 1 : 0) + (filtroContrattoManutenzione !== 'tutti' ? 1 : 0)}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Pannello filtri espandibile */}
+                    {mostraFiltriMacchinari && (
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {/* Filtro Tipo Macchinario */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Tipo Macchinario
+                            </label>
+                            <select 
+                              value={filtroTipoMacchinario}
+                              onChange={(e) => setFiltroTipoMacchinario(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                            >
+                              <option value="tutti">🔧 Tutti i tipi ({macchinari.length})</option>
+                              {tipiMacchinarioUnici.map((tipo) => {
+                                const count = macchinari.filter(m => m.tipo_macchinario === tipo).length
+                                return (
+                                  <option key={tipo} value={tipo}>
+                                    {tipo} ({count})
+                                  </option>
+                                )
+                              })}
+                            </select>
+                          </div>
+
+                          {/* Filtro Contratto Manutenzione */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Stato Manutenzione
+                            </label>
+                            <select 
+                              value={filtroContrattoManutenzione}
+                              onChange={(e) => setFiltroContrattoManutenzione(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                            >
+                              <option value="tutti">📋 Tutti</option>
+                              <option value="attivo">🛡️ Manutenzione attiva ({statsMacchinari.coperti})</option>
+                              <option value="scaduto">❌ Manutenzione scaduta ({statsMacchinari.scaduti})</option>
+                              <option value="non_coperto">📭 Senza manutenzione ({statsMacchinari.nonCoperti})</option>
+                            </select>
+                          </div>
+
+                          {/* Reset filtri */}
+                          <div className="flex items-end">
+                            <button 
+                              onClick={resetFiltriMacchinari}
+                              className="w-full px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors font-medium"
+                            >
+                              Reset filtri
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Chip tipi macchinario per selezione rapida */}
+                        <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-600">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Selezione rapida:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {tipiMacchinarioUnici.slice(0, 8).map((tipo) => {
+                              const count = macchinari.filter(m => m.tipo_macchinario === tipo).length
+                              const isSelected = filtroTipoMacchinario === tipo
+                              return (
+                                <button
+                                  key={tipo}
+                                  onClick={() => setFiltroTipoMacchinario(isSelected ? 'tutti' : tipo)}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                                    isSelected
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-500 border border-gray-200 dark:border-gray-500'
+                                  }`}
+                                >
+                                  {tipo} <span className="opacity-70">({count})</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Lista macchinari filtrata */}
+                {macchinariFiltered.length > 0 ? (
+                  <div className="space-y-4">
+                    {macchinariFiltered.map((macchinario) => {
+                      const statoMan = getStatoManutenzione(macchinario)
+                      const statoGar = getStatoGaranzia(macchinario)
+                      return (
+                        <div 
+                          key={macchinario.id}
+                          className={`border rounded-lg p-4 hover:shadow-md transition-all ${
+                            statoMan.stato === 'scaduto' 
+                              ? 'border-red-300 bg-red-50/50 dark:border-red-800 dark:bg-red-900/10' 
+                              : statoGar.stato === 'in_scadenza'
+                                ? 'border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10'
+                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-bold text-gray-900 dark:text-white">
+                                  {macchinario.tipo_macchinario}
+                                </h3>
+                                {macchinario.ubicazione_specifica && (
+                                  <span className="px-2 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded text-xs">
+                                    📍 {macchinario.ubicazione_specifica}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {macchinario.marca} - {macchinario.modello}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              {/* Badge stato MANUTENZIONE (campo testuale) */}
+                              {statoMan.stato === 'attivo' && (
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                  🛡️ Manutenzione
+                                </span>
+                              )}
+                              {statoMan.stato === 'scaduto' && (
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                  ❌ Man. Scaduta
+                                </span>
+                              )}
+                              {/* Badge stato GARANZIA (con date) */}
+                              {statoGar.stato === 'attiva' && (
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                  ✅ Garanzia
+                                </span>
+                              )}
+                              {statoGar.stato === 'attenzione' && (
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                  ⚠️ Gar. {statoGar.label}
+                                </span>
+                              )}
+                              {statoGar.stato === 'in_scadenza' && (
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 animate-pulse">
+                                  ⚠️ Gar. {statoGar.label}
+                                </span>
+                              )}
+                              {statoGar.stato === 'scaduta' && (
+                                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                                  Gar. scaduta
+                                </span>
+                              )}
+                              {/* Badge stato macchinario */}
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                macchinario.stato === 'attivo' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                              }`}>
+                                {macchinario.stato?.toUpperCase() || 'N/D'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Matricola:</span>
+                              <p className="font-mono text-gray-900 dark:text-white">{macchinario.numero_seriale}</p>
+                            </div>
+                            {macchinario.data_installazione && (
+                              <div>
+                                <span className="text-gray-500 dark:text-gray-400">Installazione:</span>
+                                <p className="text-gray-900 dark:text-white">
+                                  {new Date(macchinario.data_installazione).toLocaleDateString('it-IT')}
+                                </p>
+                              </div>
+                            )}
+                            {/* Scadenza Garanzia (usa estensione se presente) */}
+                            {(macchinario.garanzia_estensione_scadenza || macchinario.garanzia_scadenza) && (
+                              <div>
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  {macchinario.garanzia_estensione_scadenza ? 'Garanzia estesa:' : 'Scadenza garanzia:'}
+                                </span>
+                                <p className={`font-medium ${
+                                  statoGar.stato === 'scaduta' 
+                                    ? 'text-red-600 dark:text-red-400' 
+                                    : statoGar.stato === 'in_scadenza'
+                                      ? 'text-amber-600 dark:text-amber-400'
+                                      : statoGar.stato === 'attenzione'
+                                        ? 'text-yellow-600 dark:text-yellow-400'
+                                        : 'text-green-600 dark:text-green-400'
+                                }`}>
+                                  {new Date(macchinario.garanzia_estensione_scadenza || macchinario.garanzia_scadenza).toLocaleDateString('it-IT')}
+                                </p>
+                              </div>
+                            )}
+                            {/* Stato Manutenzione */}
+                            {macchinario.contratto_manutenzione && (
+                              <div>
+                                <span className="text-gray-500 dark:text-gray-400">Manutenzione:</span>
+                                <p className={`font-medium capitalize ${
+                                  macchinario.contratto_manutenzione === 'attivo' 
+                                    ? 'text-green-600 dark:text-green-400' 
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {macchinario.contratto_manutenzione}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : macchinari.length > 0 ? (
+                  // Nessun risultato con filtri attivi
+                  <div className="text-center py-12 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                    <Search className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                      Nessun macchinario trovato
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      Prova a modificare i filtri di ricerca
+                    </p>
+                    <button 
+                      onClick={resetFiltriMacchinari}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                    >
+                      Reset tutti i filtri
+                    </button>
                   </div>
                 ) : (
+                  // Nessun macchinario
                   <div className="text-center py-12">
                     <HardDrive className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
