@@ -1,21 +1,26 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 import Navbar from '@/components/Navbar'
 
 export default function LayoutClient({ children }) {
   const pathname = usePathname()
-  
+  const { user, loading } = useAuth()
+
   // ✅ Pagine dove NON mostrare la navbar
   const pagineSenzaNavbar = [
-    '/login', 
-    '/signup', 
-    '/reset-password', 
+    '/login',
+    '/signup',
+    '/reset-password',
     '/auth',
-    '/portal'  // ⬅️ AGGIUNGI QUESTA RIGA
+    '/portal'
   ]
-  
-  const mostraNavbar = !pagineSenzaNavbar.some(path => pathname?.startsWith(path))
+
+  const isPaginaSenzaNavbar = pagineSenzaNavbar.some(path => pathname?.startsWith(path))
+
+  // Mostra navbar solo se: utente loggato E non è una pagina esclusa
+  const mostraNavbar = user && !isPaginaSenzaNavbar && !loading
 
   return (
     <>
