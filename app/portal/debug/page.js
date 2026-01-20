@@ -1,14 +1,35 @@
 // app/portal/debug/page.js
 // PAGINA DEBUG - Mostra tutti i dati di collegamento
+// ⚠️ DISABILITATA IN PRODUZIONE
 
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useCustomerAuth } from '@/contexts/CustomerAuthContext'
 import { supabase } from '@/lib/supabase'
-import { AlertCircle, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, XCircle, RefreshCw, ShieldAlert } from 'lucide-react'
+
+// Blocca in produzione
+const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 
 export default function DebugPage() {
+  // Blocca accesso in produzione
+  if (IS_PRODUCTION) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
+          <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Pagina Non Disponibile
+          </h2>
+          <p className="text-gray-600">
+            Questa pagina di debug non è accessibile in produzione.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const { user, customerProfile, authLoading } = useCustomerAuth()
   const [debugData, setDebugData] = useState(null)
   const [loading, setLoading] = useState(true)
