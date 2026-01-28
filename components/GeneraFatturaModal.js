@@ -95,7 +95,7 @@ export default function GeneraFatturaModal({
 
     setLoadingDistanza(true)
     try {
-      const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_DISTANZA || 'https://n8nsimpro.simulationproject.it/webhook/calcola-distanza'
+      const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_DISTANZA || 'https://n8n.odonto-service.it/webhook/calcola-distanza'
       
       const response = await fetch(webhookUrl, {
         method: 'POST',
