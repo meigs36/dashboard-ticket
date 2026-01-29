@@ -8,6 +8,9 @@ export default function PWAInstaller() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   useEffect(() => {
+    // Controlla se l'utente ha già chiuso il banner in questa sessione del browser
+    const dismissed = sessionStorage.getItem('pwa-install-dismissed');
+
     // Ascolta l'evento beforeinstallprompt
     const handleBeforeInstallPrompt = (e) => {
       console.log('beforeinstallprompt event fired');
@@ -15,8 +18,10 @@ export default function PWAInstaller() {
       e.preventDefault();
       // Salva l'evento per usarlo dopo
       setDeferredPrompt(e);
-      // Mostra il banner personalizzato
-      setShowInstallBanner(true);
+      // Mostra il banner solo se non è stato chiuso in questa sessione
+      if (!dismissed) {
+        setShowInstallBanner(true);
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -62,8 +67,9 @@ export default function PWAInstaller() {
 
   const handleDismiss = () => {
     setShowInstallBanner(false);
-    // Salva che l'utente ha chiuso il banner
-    localStorage.setItem('pwa-install-dismissed', 'true');
+    // Salva in sessionStorage: il banner non riappare finché il browser resta aperto
+    // Alla nuova apertura del browser, sessionStorage si resetta e il banner riappare
+    sessionStorage.setItem('pwa-install-dismissed', 'true');
   };
 
   // Non mostrare se già installata o se è stato chiuso
