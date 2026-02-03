@@ -446,13 +446,19 @@ export default function ClientiPage() {
 
                   {/* Info Contatto */}
                   <div className="space-y-2 mb-4">
-                    {/* Località */}
-                    {cliente.comune && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <MapPin size={16} className="text-gray-400 flex-shrink-0" />
-                        <span>{cliente.comune.toUpperCase()} {cliente.provincia && `(${cliente.provincia})`}</span>
-                      </div>
-                    )}
+                    {/* Località - mostra sede operativa se filiale, altrimenti sede legale */}
+                    {(() => {
+                      const isFiliale = cliente.indirizzo_operativo && cliente.indirizzo_operativo !== cliente.indirizzo
+                      const comuneDaMostrare = isFiliale ? cliente.comune_operativo : cliente.comune
+                      const provinciaDaMostrare = isFiliale ? cliente.provincia_operativa : cliente.provincia
+
+                      return comuneDaMostrare && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                          <MapPin size={16} className="text-gray-400 flex-shrink-0" />
+                          <span>{comuneDaMostrare.toUpperCase()} {provinciaDaMostrare && `(${provinciaDaMostrare})`}</span>
+                        </div>
+                      )
+                    })()}
                     
                     {/* Telefono - usa span invece di a per evitare nesting */}
                     {cliente.telefono_principale && (

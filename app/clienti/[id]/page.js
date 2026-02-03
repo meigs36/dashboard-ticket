@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus, Search, Filter, X, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus, Search, Filter, X, ChevronDown, Landmark, GitBranch } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import TicketActionsModal from '@/components/TicketActionsModal'
@@ -90,7 +90,7 @@ if (contrattiError) {
             codice_cliente,
             telefono_principale,
             email_riparazioni,
-            citta,
+            comune,
             provincia
           ),
           macchinari(
@@ -455,18 +455,44 @@ if (contrattiError) {
             </div>
           </div>
 
-          {/* Indirizzo */}
+          {/* Indirizzi */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Indirizzo</h2>
-            <div className="flex items-start gap-3">
-              <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg">
-                <MapPin className="text-purple-600 dark:text-purple-400" size={18} />
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Indirizzi</h2>
+            <div className="space-y-4">
+              {/* Sede Legale */}
+              <div className="flex items-start gap-3">
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
+                  <Landmark className="text-blue-600 dark:text-blue-400" size={18} />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium">Sede Legale</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{cliente.indirizzo || '-'}</p>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {cliente.cap} {cliente.comune} {cliente.provincia && `(${cliente.provincia})`}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Sede Operativa</p>
-                <p className="font-medium text-gray-900 dark:text-white">{cliente.indirizzo}</p>
-                <p className="text-gray-600 dark:text-gray-400">{cliente.cap} {cliente.citta} ({cliente.provincia})</p>
-              </div>
+
+              {/* Sede Operativa/Filiale - mostra solo se diversa */}
+              {cliente.indirizzo_operativo && cliente.indirizzo_operativo !== cliente.indirizzo && (
+                <div className="flex items-start gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-lg">
+                    <GitBranch className="text-orange-600 dark:text-orange-400" size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mb-1 font-medium">Sede Operativa (Filiale)</p>
+                    {cliente.ragione_sociale_operativa && cliente.ragione_sociale_operativa !== cliente.ragione_sociale && (
+                      <p className="font-medium text-orange-700 dark:text-orange-300 text-sm mb-1">
+                        {cliente.ragione_sociale_operativa}
+                      </p>
+                    )}
+                    <p className="font-medium text-gray-900 dark:text-white">{cliente.indirizzo_operativo}</p>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      {cliente.cap_operativo} {cliente.comune_operativo} {cliente.provincia_operativa && `(${cliente.provincia_operativa})`}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -570,7 +596,7 @@ if (contrattiError) {
                       <LibroMacchinePDF 
                         clienteId={cliente?.id}
                         clienteNome={cliente?.ragione_sociale}
-                        sedeNome={cliente?.citta}
+                        sedeNome={cliente?.comune}
                       />
                     </div>
 
