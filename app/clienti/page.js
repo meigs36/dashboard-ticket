@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { 
-  Search, 
-  ArrowLeft, 
-  Building2, 
-  Phone, 
-  Mail, 
+import {
+  Search,
+  ArrowLeft,
+  Building2,
+  Phone,
+  Mail,
   MapPin,
   ChevronDown,
   ShieldCheck,
@@ -17,7 +17,9 @@ import {
   Check,
   Clock,
   HardDrive,
-  FileText
+  FileText,
+  Landmark,
+  GitBranch
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -120,6 +122,38 @@ function EmailDropdown({ emails }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Badge Sede/Filiale
+function SedeFiliaBadge({ cliente }) {
+  // È una filiale se ha indirizzo_operativo diverso da indirizzo
+  const isFiliale = cliente.indirizzo_operativo &&
+                    cliente.indirizzo_operativo !== cliente.indirizzo
+
+  if (isFiliale) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs">
+        <GitBranch size={14} className="text-orange-500" />
+        <span className="font-medium text-orange-600 dark:text-orange-400">
+          Filiale
+        </span>
+        {cliente.comune_operativo && (
+          <span className="text-gray-500 dark:text-gray-400">
+            • {cliente.comune_operativo}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      <Landmark size={14} className="text-blue-500" />
+      <span className="font-medium text-blue-600 dark:text-blue-400">
+        Sede
+      </span>
     </div>
   )
 }
@@ -290,8 +324,10 @@ export default function ClientiPage() {
   // Filtra clienti
   const filteredClienti = clienti.filter(cliente =>
     cliente.ragione_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    cliente.ragione_sociale_operativa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     cliente.codice_cliente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.citta?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    cliente.comune?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    cliente.comune_operativo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     cliente.email_principale?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -378,9 +414,10 @@ export default function ClientiPage() {
                       <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {cliente.ragione_sociale}
                       </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                         Cod. {cliente.codice_cliente}
                       </p>
+                      <SedeFiliaBadge cliente={cliente} />
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {/* Badge Attivo/Inattivo */}
@@ -410,10 +447,10 @@ export default function ClientiPage() {
                   {/* Info Contatto */}
                   <div className="space-y-2 mb-4">
                     {/* Località */}
-                    {cliente.citta && (
+                    {cliente.comune && (
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <MapPin size={16} className="text-gray-400 flex-shrink-0" />
-                        <span>{cliente.citta.toUpperCase()} {cliente.provincia && `(${cliente.provincia})`}</span>
+                        <span>{cliente.comune.toUpperCase()} {cliente.provincia && `(${cliente.provincia})`}</span>
                       </div>
                     )}
                     

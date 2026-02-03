@@ -4,8 +4,8 @@ create table public.clienti (
   ragione_sociale character varying(255) not null,
   codice_fiscale character varying(16) null,
   partita_iva character varying(11) null,
-  via character varying(255) null,
-  citta character varying(100) null,
+  indirizzo character varying(255) null,
+  comune character varying(100) null,
   cap character varying(10) null,
   provincia character varying(2) null,
   regione character varying(50) null,
@@ -29,6 +29,12 @@ create table public.clienti (
   data_modifica timestamp without time zone null default now(),
   creato_da character varying(100) null,
   modificato_da character varying(100) null,
+  -- Sede operativa/filiale (per ricerca e destinazione merce)
+  ragione_sociale_operativa character varying(255) null,
+  indirizzo_operativo character varying(255) null,
+  comune_operativo character varying(100) null,
+  cap_operativo character varying(10) null,
+  provincia_operativa character varying(2) null,
   constraint clienti_pkey primary key (id),
   constraint clienti_codice_cliente_key unique (codice_cliente),
   constraint chk_livello_sla check (
@@ -67,6 +73,10 @@ create index IF not exists idx_clienti_codice_cliente on public.clienti using bt
 create index IF not exists idx_clienti_email_riparazioni on public.clienti using btree (email_riparazioni) TABLESPACE pg_default;
 
 create index IF not exists idx_clienti_attivo on public.clienti using btree (attivo) TABLESPACE pg_default;
+
+create index IF not exists idx_clienti_ragione_sociale_operativa on public.clienti using btree (ragione_sociale_operativa) TABLESPACE pg_default;
+
+create index IF not exists idx_clienti_ricerca_fulltext on public.clienti using gin (to_tsvector('italian', COALESCE(ragione_sociale, '') || ' ' || COALESCE(ragione_sociale_operativa, ''))) TABLESPACE pg_default;
 
 create trigger update_clienti_modtime BEFORE
 update on clienti for EACH row
