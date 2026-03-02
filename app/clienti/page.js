@@ -19,7 +19,8 @@ import {
   HardDrive,
   FileText,
   Landmark,
-  GitBranch
+  GitBranch,
+  Fingerprint
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -195,11 +196,37 @@ function PortalBadge({ hasAccess, isActive }) {
   )
 }
 
+// Badge Consenso Accesso Remoto
+function ConsensoBadge({ consensoData }) {
+  if (!consensoData) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+        title="Consenso accesso remoto mancante"
+      >
+        <Fingerprint size={12} />
+        Consenso mancante
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+      title={`Consenso firmato il ${new Date(consensoData.created_at).toLocaleDateString('it-IT')}`}
+    >
+      <Fingerprint size={12} />
+      Consenso firmato
+    </span>
+  )
+}
+
 export default function ClientiPage() {
   const [clienti, setClienti] = useState([])
   const [portalUsers, setPortalUsers] = useState([])
   const [macchinariCount, setMacchinariCount] = useState({})
   const [contrattiData, setContrattiData] = useState({})
+  const [consensiData, setConsensiData] = useState({})
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -272,12 +299,33 @@ export default function ClientiPage() {
         })
       }
 
+      // Carica consensi accesso remoto (ultimo valido per cliente)
+      let consensiPerCliente = {}
+      try {
+        const { data: consensiList, error: consensiError } = await supabase
+          .from('consensi_accesso_remoto')
+          .select('id, cliente_id, created_at, firmato_da_nome, revocato_il')
+          .is('revocato_il', null)
+          .order('created_at', { ascending: false })
+
+        if (!consensiError && consensiList) {
+          consensiList.forEach(c => {
+            if (c.cliente_id && !consensiPerCliente[c.cliente_id]) {
+              consensiPerCliente[c.cliente_id] = c
+            }
+          })
+        }
+      } catch (e) {
+        console.log('Tabella consensi_accesso_remoto non disponibile')
+      }
+
       setClienti(clientiData || [])
       setPortalUsers(usersData)
       setMacchinariCount(macchinariPerCliente)
-      setContrattiData({ 
-        contratti: contrattiPerCliente, 
-        count: contrattiCountPerCliente 
+      setConsensiData(consensiPerCliente)
+      setContrattiData({
+        contratti: contrattiPerCliente,
+        count: contrattiCountPerCliente
       })
 
     } catch (error) {
@@ -401,6 +449,7 @@ export default function ClientiPage() {
               const numMacchinari = macchinariCount[cliente.id] || 0
               const numContratti = contrattiData.count?.[cliente.id] || 0
               const contrattoAttivo = contrattiData.contratti?.[cliente.id]
+              const consensoCliente = consensiData[cliente.id] || null
               
               return (
                 <Link
@@ -433,10 +482,12 @@ export default function ClientiPage() {
                         </span>
                       )}
                       {/* Badge Portale */}
-                      <PortalBadge 
-                        hasAccess={!!portalAccess} 
-                        isActive={portalAccess?.attivo} 
+                      <PortalBadge
+                        hasAccess={!!portalAccess}
+                        isActive={portalAccess?.attivo}
                       />
+                      {/* Badge Consenso */}
+                      <ConsensoBadge consensoData={consensoCliente} />
                       {/* Icona edificio */}
                       <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <Building2 className="text-blue-500 dark:text-blue-400" size={20} />

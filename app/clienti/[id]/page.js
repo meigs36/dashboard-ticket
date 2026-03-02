@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus, Search, Filter, X, ChevronDown, Landmark, GitBranch } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, MapPin, HardDrive, Calendar, Shield, Ticket, Clock, Settings, FileText, Edit2, Trash2, Plus, Search, Filter, X, ChevronDown, Landmark, GitBranch, Fingerprint, Download, Ban, CheckCircle2, ExternalLink, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import TicketActionsModal from '@/components/TicketActionsModal'
@@ -17,7 +17,8 @@ export default function ClienteDettaglio() {
   const [contratti, setContratti] = useState([])
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('macchinari') // macchinari | ticket | contratti | infrastruttura
+  const [consensi, setConsensi] = useState([])
+  const [activeTab, setActiveTab] = useState('macchinari') // macchinari | ticket | contratti | infrastruttura | consensi
   
   // Stati per modal ticket
   const [ticketSelezionato, setTicketSelezionato] = useState(null)
@@ -105,6 +106,41 @@ if (contrattiError) {
 
       if (ticketsError) throw ticketsError
       setTickets(ticketsData || [])
+
+      // Carica consensi accesso remoto
+      try {
+        const { data: consensiData, error: consensiError } = await supabase
+          .from('consensi_accesso_remoto')
+          .select(`
+            id,
+            created_at,
+            consenso_accesso_remoto,
+            consenso_dati_sanitari,
+            consenso_modalita_accesso,
+            consenso_autorizzazione_titolare,
+            firma_grafica_url,
+            documento_hash,
+            ip_address,
+            firmato_da_nome,
+            firmato_da_ruolo,
+            pdf_storage_path,
+            note,
+            revocato_il,
+            revocato_motivo,
+            tecnico:utenti!consensi_accesso_remoto_tecnico_id_fkey(
+              nome,
+              cognome
+            )
+          `)
+          .eq('cliente_id', params.id)
+          .order('created_at', { ascending: false })
+
+        if (!consensiError) {
+          setConsensi(consensiData || [])
+        }
+      } catch (e) {
+        console.log('Tabella consensi_accesso_remoto non disponibile')
+      }
 
     } catch (error) {
       console.error('Errore caricamento:', error)
@@ -551,6 +587,19 @@ if (contrattiError) {
                 <div className="flex items-center justify-center gap-2">
                   <Settings size={18} />
                   <span>Infrastruttura</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('consensi')}
+                className={`flex-shrink-0 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
+                  activeTab === 'consensi'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Fingerprint size={18} />
+                  <span>Consensi ({consensi.filter(c => !c.revocato_il).length})</span>
                 </div>
               </button>
             </div>
@@ -1158,6 +1207,313 @@ if (contrattiError) {
             {/* Tab Infrastruttura */}
             {activeTab === 'infrastruttura' && (
               <InfrastrutturaForm clienteId={params.id} />
+            )}
+
+            {/* Tab Consensi */}
+            {activeTab === 'consensi' && (
+              <>
+                {/* Header con link raccolta consenso */}
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Consensi Accesso Remoto
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Storico autorizzazioni per accesso remoto ai sistemi dello studio
+                    </p>
+                  </div>
+                  <a
+                    href="/consensi"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                  >
+                    <ExternalLink size={16} />
+                    Raccogli Consenso
+                  </a>
+                </div>
+
+                {/* Riepilogo stato consenso */}
+                {(() => {
+                  const consensoAttivo = consensi.find(c => !c.revocato_il)
+                  const consensiRevocati = consensi.filter(c => c.revocato_il)
+
+                  return (
+                    <div className={`rounded-xl p-4 mb-6 border ${
+                      consensoAttivo
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${
+                          consensoAttivo
+                            ? 'bg-emerald-100 dark:bg-emerald-900/40'
+                            : 'bg-red-100 dark:bg-red-900/40'
+                        }`}>
+                          <Fingerprint size={24} className={
+                            consensoAttivo
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-red-600 dark:text-red-400'
+                          } />
+                        </div>
+                        <div>
+                          <p className={`font-semibold ${
+                            consensoAttivo
+                              ? 'text-emerald-800 dark:text-emerald-300'
+                              : 'text-red-800 dark:text-red-300'
+                          }`}>
+                            {consensoAttivo
+                              ? `Consenso attivo — firmato il ${new Date(consensoAttivo.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}`
+                              : 'Nessun consenso attivo'
+                            }
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+                            {consensoAttivo
+                              ? `Firmato da: ${consensoAttivo.firmato_da_nome}${consensoAttivo.firmato_da_ruolo ? ` (${consensoAttivo.firmato_da_ruolo})` : ''}`
+                              : 'È necessario raccogliere il consenso per l\'accesso remoto ai sistemi del cliente'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Lista consensi */}
+                {consensi.length > 0 ? (
+                  <div className="space-y-4">
+                    {consensi.map((consenso) => {
+                      const isRevocato = !!consenso.revocato_il
+                      const dataFirma = new Date(consenso.created_at)
+                      const tecnicoNome = consenso.tecnico
+                        ? `${consenso.tecnico.nome || ''} ${consenso.tecnico.cognome || ''}`.trim()
+                        : 'N/D'
+
+                      return (
+                        <div
+                          key={consenso.id}
+                          className={`border rounded-xl p-5 transition-all ${
+                            isRevocato
+                              ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-75'
+                              : 'border-emerald-200 dark:border-emerald-800 bg-white dark:bg-gray-800 hover:shadow-md'
+                          }`}
+                        >
+                          {/* Header consenso */}
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-lg ${
+                                isRevocato
+                                  ? 'bg-gray-100 dark:bg-gray-700'
+                                  : 'bg-emerald-100 dark:bg-emerald-900/30'
+                              }`}>
+                                {isRevocato ? (
+                                  <Ban size={20} className="text-gray-500 dark:text-gray-400" />
+                                ) : (
+                                  <CheckCircle2 size={20} className="text-emerald-600 dark:text-emerald-400" />
+                                )}
+                              </div>
+                              <div>
+                                <h4 className={`font-semibold ${
+                                  isRevocato
+                                    ? 'text-gray-500 dark:text-gray-400 line-through'
+                                    : 'text-gray-900 dark:text-white'
+                                }`}>
+                                  Autorizzazione Accesso Remoto
+                                </h4>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  Firmato il {dataFirma.toLocaleDateString('it-IT', {
+                                    day: '2-digit',
+                                    month: 'long',
+                                    year: 'numeric'
+                                  })} alle {dataFirma.toLocaleTimeString('it-IT', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {isRevocato ? (
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                  REVOCATO
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                  ATTIVO
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Dettagli consenso */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Firmatario</span>
+                              <span className="text-gray-900 dark:text-white font-medium">
+                                {consenso.firmato_da_nome}
+                              </span>
+                              {consenso.firmato_da_ruolo && (
+                                <span className="text-gray-500 dark:text-gray-400 block text-xs">
+                                  {consenso.firmato_da_ruolo}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Tecnico presente</span>
+                              <span className="text-gray-900 dark:text-white font-medium">
+                                {tecnicoNome}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400 block mb-1">IP Address</span>
+                              <span className="text-gray-900 dark:text-white font-mono text-xs">
+                                {consenso.ip_address || 'N/D'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400 block mb-1">Hash documento</span>
+                              <span className="text-gray-900 dark:text-white font-mono text-xs truncate block" title={consenso.documento_hash}>
+                                {consenso.documento_hash ? consenso.documento_hash.substring(0, 16) + '...' : 'N/D'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Checkbox consensi */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                            <div className="flex items-center gap-2 text-xs">
+                              <div className={`w-4 h-4 rounded flex items-center justify-center ${
+                                consenso.consenso_accesso_remoto ? 'bg-emerald-500' : 'bg-gray-300'
+                              }`}>
+                                {consenso.consenso_accesso_remoto && <Check size={12} className="text-white" />}
+                              </div>
+                              <span className="text-gray-600 dark:text-gray-400">Accesso remoto</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <div className={`w-4 h-4 rounded flex items-center justify-center ${
+                                consenso.consenso_dati_sanitari ? 'bg-emerald-500' : 'bg-gray-300'
+                              }`}>
+                                {consenso.consenso_dati_sanitari && <Check size={12} className="text-white" />}
+                              </div>
+                              <span className="text-gray-600 dark:text-gray-400">Dati sanitari</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <div className={`w-4 h-4 rounded flex items-center justify-center ${
+                                consenso.consenso_modalita_accesso ? 'bg-emerald-500' : 'bg-gray-300'
+                              }`}>
+                                {consenso.consenso_modalita_accesso && <Check size={12} className="text-white" />}
+                              </div>
+                              <span className="text-gray-600 dark:text-gray-400">Modalità accesso</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <div className={`w-4 h-4 rounded flex items-center justify-center ${
+                                consenso.consenso_autorizzazione_titolare ? 'bg-emerald-500' : 'bg-gray-300'
+                              }`}>
+                                {consenso.consenso_autorizzazione_titolare && <Check size={12} className="text-white" />}
+                              </div>
+                              <span className="text-gray-600 dark:text-gray-400">Aut. titolare</span>
+                            </div>
+                          </div>
+
+                          {/* Note e revoca */}
+                          {consenso.note && (
+                            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 mb-3 text-sm">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">Note: </span>
+                              <span className="text-gray-600 dark:text-gray-400">{consenso.note}</span>
+                            </div>
+                          )}
+
+                          {isRevocato && (
+                            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 mb-3 text-sm border border-red-200 dark:border-red-800">
+                              <span className="font-medium text-red-700 dark:text-red-400">Revocato il: </span>
+                              <span className="text-red-600 dark:text-red-400">
+                                {new Date(consenso.revocato_il).toLocaleDateString('it-IT', {
+                                  day: '2-digit',
+                                  month: 'long',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                              {consenso.revocato_motivo && (
+                                <p className="text-red-600 dark:text-red-400 mt-1">
+                                  Motivo: {consenso.revocato_motivo}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Footer con azioni */}
+                          <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center gap-4">
+                              {consenso.pdf_storage_path && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const { data } = await supabase.storage
+                                        .from('customer-documents')
+                                        .createSignedUrl(consenso.pdf_storage_path, 300)
+                                      if (data?.signedUrl) {
+                                        window.open(data.signedUrl, '_blank')
+                                      }
+                                    } catch (err) {
+                                      console.error('Errore download PDF:', err)
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                                >
+                                  <Download size={16} />
+                                  Scarica PDF
+                                </button>
+                              )}
+                              {consenso.firma_grafica_url && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const { data } = await supabase.storage
+                                        .from('customer-documents')
+                                        .createSignedUrl(consenso.firma_grafica_url, 300)
+                                      if (data?.signedUrl) {
+                                        window.open(data.signedUrl, '_blank')
+                                      }
+                                    } catch (err) {
+                                      console.error('Errore visualizzazione firma:', err)
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                                >
+                                  <Fingerprint size={16} />
+                                  Vedi firma
+                                </button>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                              ID: {consenso.id.substring(0, 8)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Fingerprint className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                      Nessun consenso registrato
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      Questo cliente non ha ancora firmato il consenso per l'accesso remoto
+                    </p>
+                    <a
+                      href="/consensi"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      <ExternalLink size={18} />
+                      Raccogli Consenso
+                    </a>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
