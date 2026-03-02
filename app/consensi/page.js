@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { Search, Building2, Shield, CheckCircle2, AlertTriangle, FileText, Loader2, Download, ChevronDown, ChevronUp, User, Wifi, Eye, Clock, XCircle, Scale } from 'lucide-react'
 import SignaturePad from '@/components/SignaturePad'
+import { scaricaConsensoPDF } from '@/lib/generaConsensoPDF'
 
 // =====================================================
 // TESTI LEGALI DEI CONSENSI
@@ -196,7 +197,26 @@ export default function ConsensiPage() {
         return
       }
 
-      setSuccessData(result)
+      setSuccessData({ ...result, hash })
+
+      // Genera e scarica PDF automaticamente
+      try {
+        const tecnico = tecnici.find(t => t.id === tecnicoId)
+        scaricaConsensoPDF({
+          cliente,
+          firmatoDaNome: firmatoDaNome.trim(),
+          firmatoDaRuolo: firmatoDaRuolo.trim() || '',
+          tecnicoNome: tecnico ? `${tecnico.cognome} ${tecnico.nome}` : 'N/D',
+          firmaDataUrl,
+          hash,
+          consensi,
+          note: note.trim() || '',
+          ipAddress: result.ip_address || null
+        })
+      } catch (pdfErr) {
+        console.error('Errore generazione PDF:', pdfErr)
+      }
+
       setStep('success')
     } catch (err) {
       setError('Errore di connessione al server')
@@ -584,6 +604,31 @@ export default function ConsensiPage() {
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => {
+                  try {
+                    const tecnico = tecnici.find(t => t.id === tecnicoId)
+                    scaricaConsensoPDF({
+                      cliente,
+                      firmatoDaNome: firmatoDaNome.trim(),
+                      firmatoDaRuolo: firmatoDaRuolo.trim() || '',
+                      tecnicoNome: tecnico ? `${tecnico.cognome} ${tecnico.nome}` : 'N/D',
+                      firmaDataUrl,
+                      hash: successData?.hash || '',
+                      consensi,
+                      note: note.trim() || '',
+                      ipAddress: successData?.ip_address || null
+                    })
+                  } catch (err) {
+                    console.error('Errore download PDF:', err)
+                  }
+                }}
+                className="w-full py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+              >
+                <Download size={18} />
+                Scarica PDF Consenso
+              </button>
+
+              <button
+                onClick={() => {
                   setStep('search')
                   setCodiceCliente('')
                   setCliente(null)
@@ -594,6 +639,7 @@ export default function ConsensiPage() {
                   setNote('')
                   setTecnicoId('')
                   setError('')
+                  setSuccessData(null)
                 }}
                 className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
               >

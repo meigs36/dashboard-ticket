@@ -109,6 +109,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       consenso_id: consenso.id,
+      ip_address,
       message: 'Consenso salvato con successo'
     })
 
