@@ -72,13 +72,13 @@ export async function GET(request) {
       cliente: {
         ragione_sociale: cliente.ragione_sociale,
         indirizzo: cliente.indirizzo,
-        citta: cliente.citta,
+        citta: cliente.comune,  // colonna DB è 'comune'
         cap: cliente.cap,
         provincia: cliente.provincia
       },
       sede: {
         nome: cliente.ragione_sociale,
-        indirizzo: `${cliente.indirizzo || ''}, ${cliente.citta || ''}`
+        indirizzo: `${cliente.indirizzo || ''}, ${cliente.comune || ''}`
       },
       macchinari: macchinariOrdinati.map((m, index) => ({
         num_libro_macchina: m.numero_libro || index + 1,

@@ -92,7 +92,7 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
     try {
       const { data, error } = await supabase
         .from('clienti')
-        .select('id, ragione_sociale, email_principale, email_pec, email_amministrazione, citta, indirizzo, provincia, codice_cliente')
+        .select('id, ragione_sociale, email_principale, email_pec, email_amministrazione, comune, indirizzo, provincia, codice_cliente')
         .eq('id', ticket.id_cliente)
         .single()
       
@@ -797,11 +797,11 @@ export default function TicketActionsModal({ ticket, onClose, onUpdate }) {
             </h2>
             
             {/* ✅ Info Sede/Filiale */}
-            {cliente && (cliente.citta || cliente.indirizzo) && (
+            {cliente && (cliente.comune || cliente.indirizzo) && (
               <div className="flex items-center gap-1.5 mt-1">
                 <MapPin size={14} className="text-purple-500 flex-shrink-0" />
                 <span className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">
-                  {cliente.citta}{cliente.indirizzo ? ` - ${cliente.indirizzo}` : ''}{cliente.provincia ? ` (${cliente.provincia})` : ''}
+                  {cliente.comune}{cliente.indirizzo ? ` - ${cliente.indirizzo}` : ''}{cliente.provincia ? ` (${cliente.provincia})` : ''}
                   {cliente.codice_cliente && <span className="text-gray-400 ml-1">• Cod. {cliente.codice_cliente}</span>}
                 </span>
               </div>

@@ -538,13 +538,13 @@ export default function CustomerDashboard() {
             {/* ✅ MULTI-SEDE: Badge sede corrente */}
             {isMultiSede && sedeAttiva && (
               <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-medium">
-                📍 {sedeAttiva.citta} ({sediCollegate.length} sedi)
+                📍 {sedeAttiva.comune} ({sediCollegate.length} sedi)
               </span>
             )}
           </div>
           <p className="text-blue-100 mb-6">
             {isMultiSede && sedeAttiva
-              ? `Stai visualizzando: ${sedeAttiva.indirizzo || sedeAttiva.citta} (${sedeAttiva.codice_cliente})`
+              ? `Stai visualizzando: ${sedeAttiva.indirizzo || sedeAttiva.comune} (${sedeAttiva.codice_cliente})`
               : 'Gestisci la tua assistenza tecnica in un unico posto'
             }
           </p>
@@ -721,7 +721,7 @@ export default function CustomerDashboard() {
                     </p>
                     <p className="font-medium text-gray-900">
                       {cliente?.via || '-'}<br />
-                      {cliente?.cap} {cliente?.citta} ({cliente?.provincia})
+                      {cliente?.cap} {cliente?.comune} ({cliente?.provincia})
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -1121,7 +1121,7 @@ export default function CustomerDashboard() {
                         <LibroMacchinePDF 
                           clienteId={sedeAttiva?.id || customerProfile?.cliente_id}
                           clienteNome={sedeAttiva?.ragione_sociale || dashboardData.cliente?.ragione_sociale}
-                          sedeNome={sedeAttiva?.citta}
+                          sedeNome={sedeAttiva?.comune}
                         />
                       </div>
                       

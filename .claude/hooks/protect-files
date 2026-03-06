@@ -1,0 +1,14 @@
+#!/bin/bash
+INPUT=$(cat)
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+
+if [ -z "$FILE_PATH" ]; then
+  exit 0
+fi
+
+if [[ "$FILE_PATH" == *.env* ]] || [[ "$FILE_PATH" == *lock.json ]] || [[ "$FILE_PATH" == *lock.yaml ]]; then
+  echo "BLOCCATO: non posso modificare $FILE_PATH (file sensibile)" >&2
+  exit 2
+fi
+
+exit 0

@@ -36,7 +36,7 @@ export default function ImpostazioniPage() {
   })
 
   useEffect(() => {
-    loadImpostazioni()
+    if (userProfile) loadImpostazioni()
   }, [userProfile])
 
   async function loadImpostazioni() {

@@ -202,7 +202,7 @@ export default function ConsensiPage() {
       // Genera e scarica PDF automaticamente
       try {
         const tecnico = tecnici.find(t => t.id === tecnicoId)
-        scaricaConsensoPDF({
+        await scaricaConsensoPDF({
           cliente,
           firmatoDaNome: firmatoDaNome.trim(),
           firmatoDaRuolo: firmatoDaRuolo.trim() || '',
@@ -237,27 +237,15 @@ export default function ConsensiPage() {
   // =====================================================
   return (
     <div className="min-h-screen py-8 px-4">
-      {/* Header */}
-      <div className="max-w-3xl mx-auto mb-8">
-        <div className="flex items-center gap-4 mb-2">
-          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg">
-            🦷
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Odonto Service</h1>
-            <p className="text-sm text-gray-500">Autorizzazione Accesso Remoto</p>
-          </div>
-        </div>
-      </div>
-
       {/* ===== STEP 1: Ricerca cliente ===== */}
       {step === 'search' && (
         <div className="max-w-md mx-auto">
+          {/* Logo centrato sopra al riquadro */}
+          <div className="flex justify-center mb-6">
+            <img src="/Logo.webp" alt="Odonto Service" className="h-16 w-auto" />
+          </div>
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Search className="text-blue-600" size={28} />
-              </div>
               <h2 className="text-xl font-bold text-gray-900">Inserisci Codice Cliente</h2>
               <p className="text-sm text-gray-500 mt-1">
                 Il tecnico inserisce il codice per caricare i dati dello studio
@@ -603,10 +591,10 @@ export default function ConsensiPage() {
 
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
                     const tecnico = tecnici.find(t => t.id === tecnicoId)
-                    scaricaConsensoPDF({
+                    await scaricaConsensoPDF({
                       cliente,
                       firmatoDaNome: firmatoDaNome.trim(),
                       firmatoDaRuolo: firmatoDaRuolo.trim() || '',

@@ -71,7 +71,7 @@ export async function PUT(request) {
       'email',
       'pec',
       'indirizzo',
-      'citta',
+      'comune',
       'cap',
       'provincia',
       'regione',

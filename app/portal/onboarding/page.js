@@ -57,7 +57,7 @@ export default function OnboardingPage() {
       setPreloadedData(null) // Reset dati precedenti
       
       try {
-        console.log('🔍 Caricamento dati per sede:', clienteId, sedeAttiva?.citta || '')
+        console.log('🔍 Caricamento dati per sede:', clienteId, sedeAttiva?.comune || '')
         
         // 1. Carica dati cliente
         const { data: clienteData, error: clienteError } = await supabase
@@ -103,7 +103,7 @@ export default function OnboardingPage() {
           partita_iva: clienteData.partita_iva || '',
           codice_fiscale: clienteData.codice_fiscale || '',
           indirizzo: clienteData.indirizzo || '',
-          citta: clienteData.citta || '',
+          comune: clienteData.comune || '',
           cap: clienteData.cap || '',
           provincia: clienteData.provincia || '',
           telefono: clienteData.telefono_principale || '',
@@ -169,7 +169,7 @@ export default function OnboardingPage() {
           _clienteId: clienteData.id,
           _codiceCliente: clienteData.codice_cliente,
           _sedeInfo: sedeAttiva ? {
-            citta: sedeAttiva.citta,
+            comune: sedeAttiva.comune,
             indirizzo: sedeAttiva.indirizzo,
             codice: sedeAttiva.codice_cliente
           } : null,
@@ -270,7 +270,7 @@ export default function OnboardingPage() {
           <p className="text-gray-900 font-semibold mb-2">Caricamento dati...</p>
           <p className="text-gray-600 text-sm">
             {isMultiSede && sedeAttiva 
-              ? `Caricamento dati per sede: ${sedeAttiva.citta}`
+              ? `Caricamento dati per sede: ${sedeAttiva.comune}`
               : 'Stiamo controllando se hai già dei dati nel nostro sistema'
             }
           </p>
@@ -296,7 +296,7 @@ export default function OnboardingPage() {
               <>
                 <br />
                 <span className="text-sm text-gray-500">
-                  Sede: {sedeAttiva.citta} ({sedeAttiva.codice_cliente})
+                  Sede: {sedeAttiva.comune} ({sedeAttiva.codice_cliente})
                 </span>
               </>
             )}
@@ -328,7 +328,7 @@ export default function OnboardingPage() {
                 Compilazione Infrastruttura Sede
               </h3>
               <p className="text-blue-700 text-sm">
-                📍 {sedeAttiva.citta} - {sedeAttiva.indirizzo || sedeAttiva.ragione_sociale} ({sedeAttiva.codice_cliente})
+                📍 {sedeAttiva.comune} - {sedeAttiva.indirizzo || sedeAttiva.ragione_sociale} ({sedeAttiva.codice_cliente})
               </p>
             </div>
           </div>

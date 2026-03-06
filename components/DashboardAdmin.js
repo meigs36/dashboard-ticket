@@ -26,50 +26,37 @@ export default function DashboardAdmin() {
   const [mostraModalAzioni, setMostraModalAzioni] = useState(false)
 
   useEffect(() => {
-    loadStats()
-    loadMiniChart()
-    loadRecentTickets()
+    supabase.auth.getSession().then(() => {
+      loadStats()
+      loadMiniChart()
+      loadRecentTickets()
+    })
   }, [])
 
   async function loadStats() {
     try {
-      const { count: clientiCount } = await supabase
-        .from('clienti')
-        .select('*', { count: 'exact', head: true })
-
-      const { count: clientiAttiviCount } = await supabase
-        .from('clienti')
-        .select('*', { count: 'exact', head: true })
-        .eq('attivo', true)
-
-      const { count: macchinariCount } = await supabase
-        .from('macchinari')
-        .select('*', { count: 'exact', head: true })
-
-      const { count: ticketApertiCount } = await supabase
-        .from('ticket')
-        .select('*', { count: 'exact', head: true })
-        .in('stato', ['aperto', 'assegnato', 'in_lavorazione'])
-
-      // 🆕 Conta accessi portale attivi
-      let accessiPortaleCount = 0
-      try {
-        const { count } = await supabase
-          .from('customer_portal_users')
-          .select('*', { count: 'exact', head: true })
-          .eq('attivo', true)
-        accessiPortaleCount = count || 0
-      } catch (e) {
-        // Tabella potrebbe non esistere ancora
-        console.log('Tabella customer_portal_users non disponibile')
-      }
+      // ⚡ Tutte le query count in PARALLELO
+      const [
+        { count: clientiCount },
+        { count: clientiAttiviCount },
+        { count: macchinariCount },
+        { count: ticketApertiCount },
+        accessiPortaleResult
+      ] = await Promise.all([
+        supabase.from('clienti').select('*', { count: 'exact', head: true }),
+        supabase.from('clienti').select('*', { count: 'exact', head: true }).eq('attivo', true),
+        supabase.from('macchinari').select('*', { count: 'exact', head: true }),
+        supabase.from('ticket').select('*', { count: 'exact', head: true }).in('stato', ['aperto', 'assegnato', 'in_lavorazione']),
+        supabase.from('customer_portal_users').select('*', { count: 'exact', head: true }).eq('attivo', true)
+          .then(({ count }) => count || 0).catch(() => 0)
+      ])
 
       setStats({
         totalClienti: clientiCount || 0,
         totalMacchinari: macchinariCount || 0,
         clientiAttivi: clientiAttiviCount || 0,
         ticketAperti: ticketApertiCount || 0,
-        accessiPortale: accessiPortaleCount,
+        accessiPortale: accessiPortaleResult,
         loading: false
       })
     } catch (error) {
@@ -122,7 +109,7 @@ export default function DashboardAdmin() {
           codice_cliente,
           telefono_principale,
           email_riparazioni,
-          citta,
+          comune,
           provincia
         ),
         macchinari(

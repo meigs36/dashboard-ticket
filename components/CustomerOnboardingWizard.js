@@ -34,7 +34,7 @@ export default function CustomerOnboardingWizard({
     partita_iva: '',
     codice_fiscale: '',
     indirizzo: '',
-    citta: '',
+    comune: '',
     cap: '',
     provincia: '',
     telefono: '',
@@ -95,7 +95,7 @@ export default function CustomerOnboardingWizard({
         partita_iva: initialData.partita_iva || prev.partita_iva,
         codice_fiscale: initialData.codice_fiscale || prev.codice_fiscale,
         indirizzo: initialData.indirizzo || prev.indirizzo,
-        citta: initialData.citta || prev.citta,
+        comune: initialData.comune || prev.comune,
         cap: initialData.cap || prev.cap,
         provincia: initialData.provincia || prev.provincia,
         telefono: initialData.telefono || prev.telefono,
@@ -602,7 +602,7 @@ export default function CustomerOnboardingWizard({
           partita_iva: formData.partita_iva,
           codice_fiscale: formData.codice_fiscale,
           indirizzo: formData.indirizzo,
-          citta: formData.citta,
+          comune: formData.comune,
           cap: formData.cap,
           provincia: formData.provincia,
           telefono: formData.telefono,
@@ -926,8 +926,8 @@ export default function CustomerOnboardingWizard({
                     <input
                       type="text"
                       required
-                      value={formData.citta}
-                      onChange={(e) => handleChange('citta', e.target.value)}
+                      value={formData.comune}
+                      onChange={(e) => handleChange('comune', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Milano"
                     />
@@ -1531,7 +1531,7 @@ export default function CustomerOnboardingWizard({
                     <div>
                       <span className="text-gray-600">Indirizzo:</span>
                       <p className="font-medium text-gray-900">
-                        {formData.indirizzo || '-'}, {formData.cap} {formData.citta} ({formData.provincia})
+                        {formData.indirizzo || '-'}, {formData.cap} {formData.comune} ({formData.provincia})
                       </p>
                     </div>
                     <div>

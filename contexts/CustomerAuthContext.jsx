@@ -1,6 +1,5 @@
 // contexts/CustomerAuthContext.jsx
 // Context di autenticazione per il Portale Clienti
-// ✅ FIX 10 Dic 2025: Risolto loop infinito su visibilitychange
 
 'use client'
 
@@ -28,149 +27,29 @@ export function CustomerAuthProvider({ children }) {
   const [sediCollegate, setSediCollegate] = useState([])
   const [sedeAttiva, setSedeAttiva] = useState(null)
 
-  // ✅ FIX: Refs per evitare loop
-  const isCheckingSession = useRef(false)
-  const lastCheckTime = useRef(0)
-  const profileLoadedRef = useRef(false)
+  // ✅ FIX: Refs per evitare race condition
+  const isLoadingProfile = useRef(false)
+  const profileLoadedForUser = useRef(null)
+  const initDone = useRef(false)
+  const mountedRef = useRef(true)
 
-  // ✅ FIX: Check sessione senza loop
-  const checkSession = useCallback(async () => {
-    // Evita check multipli simultanei
-    if (isCheckingSession.current) {
-      console.log('⏳ Check sessione già in corso, skip')
+  async function loadCustomerProfile(userId, force = false) {
+    // Guard: evita chiamate duplicate simultanee
+    if (isLoadingProfile.current) {
+      console.log('⏳ Profilo cliente già in caricamento, skip')
+      return
+    }
+    // Guard: evita ricaricamento se già caricato per questo utente
+    if (!force && profileLoadedForUser.current === userId) {
+      console.log('✅ Profilo cliente già caricato per questo utente')
       return
     }
 
-    // Evita check troppo frequenti (minimo 10 secondi)
-    const now = Date.now()
-    if (now - lastCheckTime.current < 10000) {
-      console.log('⏳ Check recente, skip')
-      return
-    }
+    isLoadingProfile.current = true
 
-    isCheckingSession.current = true
-    lastCheckTime.current = now
-
-    try {
-      console.log('🔍 Verifica sessione customer...')
-      
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('❌ Errore verifica sessione customer:', error)
-        
-        if (error.message?.includes('refresh_token_not_found') || 
-            error.message?.includes('Invalid Refresh Token')) {
-          await supabase.auth.signOut()
-          setUser(null)
-          setCustomerProfile(null)
-          setSediCollegate([])
-          setSedeAttiva(null)
-          profileLoadedRef.current = false
-        }
-        setLoading(false)
-        isCheckingSession.current = false
-        return
-      }
-      
-      if (session?.user) {
-        console.log('✅ Customer sessione attiva:', session.user.email)
-        setUser(session.user)
-        
-        // ✅ FIX: Carica profilo SOLO se non già caricato
-        if (!profileLoadedRef.current) {
-          await loadCustomerProfile(session.user.id)
-          profileLoadedRef.current = true
-        }
-      } else {
-        console.log('❌ Nessuna customer sessione attiva')
-        setUser(null)
-        setCustomerProfile(null)
-        profileLoadedRef.current = false
-      }
-    } catch (error) {
-      console.error('❌ Errore verifica customer sessione:', error)
-    } finally {
-      setLoading(false)
-      isCheckingSession.current = false
-    }
-  }, [])
-
-  // Setup iniziale
-  useEffect(() => {
-    // Verifica sessione iniziale
-    checkSession()
-
-    // Listener per cambio auth
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔐 Customer Auth event:', event)
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          setUser(session.user)
-          if (!profileLoadedRef.current) {
-            await loadCustomerProfile(session.user.id)
-            profileLoadedRef.current = true
-          }
-        } 
-        else if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setCustomerProfile(null)
-          setSediCollegate([])
-          setSedeAttiva(null)
-          profileLoadedRef.current = false
-        }
-        else if (event === 'TOKEN_REFRESHED') {
-          console.log('✅ Customer token refreshed')
-          if (session?.user) {
-            setUser(session.user)
-          }
-        }
-        else if (event === 'INITIAL_SESSION') {
-          if (session?.user) {
-            setUser(session.user)
-            if (!profileLoadedRef.current) {
-              await loadCustomerProfile(session.user.id)
-              profileLoadedRef.current = true
-            }
-          }
-          setLoading(false)
-        }
-      }
-    )
-
-    // ✅ FIX: Visibility change semplificato - NO reload profilo
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👁️ App tornata visibile')
-        // Solo forza fine loading, NON ricaricare profilo
-        if (loading) {
-          setLoading(false)
-        }
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    // Timeout di sicurezza
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn('⚠️ Timeout loading auth, forcing completion')
-        setLoading(false)
-      }
-    }, 8000)
-
-    return () => {
-      authListener?.subscription?.unsubscribe()
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      clearTimeout(timeout)
-    }
-  }, [])
-
-  async function loadCustomerProfile(userId) {
     try {
       console.log('📊 Caricamento profilo cliente:', userId)
-      
+
       const { data: customerUser, error: userError } = await supabase
         .from('customer_portal_users')
         .select(`
@@ -179,6 +58,8 @@ export function CustomerAuthProvider({ children }) {
         `)
         .eq('id', userId)
         .maybeSingle()
+
+      if (!mountedRef.current) return
 
       if (userError) {
         console.error('❌ Profilo non trovato nel DB:', userError)
@@ -197,7 +78,7 @@ export function CustomerAuthProvider({ children }) {
       }
 
       console.log('✅ Dati utente caricati:', customerUser.cliente?.ragione_sociale)
-      
+
       if (!customerUser.attivo) {
         console.error('❌ Account cliente disattivato')
         setCustomerProfile(null)
@@ -217,7 +98,7 @@ export function CustomerAuthProvider({ children }) {
         codice_fiscale: customerUser.cliente?.codice_fiscale || '',
         codice_cliente: customerUser.cliente?.codice_cliente || '',
         indirizzo: customerUser.cliente?.indirizzo || '',
-        citta: customerUser.cliente?.citta || '',
+        comune: customerUser.cliente?.comune || '',
         cap: customerUser.cliente?.cap || '',
         provincia: customerUser.cliente?.provincia || '',
         telefono: customerUser.cliente?.telefono_principale || '',
@@ -231,6 +112,7 @@ export function CustomerAuthProvider({ children }) {
       }
 
       setCustomerProfile(profile)
+      profileLoadedForUser.current = userId
 
       if (customerUser.cliente?.partita_iva) {
         await loadSediCollegate(customerUser.cliente.partita_iva, customerUser.cliente_id)
@@ -238,12 +120,14 @@ export function CustomerAuthProvider({ children }) {
         setSediCollegate([])
         setSedeAttiva(null)
       }
-      
+
       await checkOnboardingStatus(userId, customerUser.cliente_id)
 
     } catch (error) {
       console.error('❌ Errore caricamento profilo cliente:', error)
-      setCustomerProfile(null)
+      if (mountedRef.current) setCustomerProfile(null)
+    } finally {
+      isLoadingProfile.current = false
     }
   }
 
@@ -259,7 +143,7 @@ export function CustomerAuthProvider({ children }) {
           ragione_sociale,
           partita_iva,
           indirizzo,
-          citta,
+          comune,
           cap,
           provincia,
           telefono_principale,
@@ -281,7 +165,7 @@ export function CustomerAuthProvider({ children }) {
       if (sedi && sedi.length > 0) {
         const sediFormattate = sedi.map(sede => ({
           ...sede,
-          label: `${sede.citta || 'N/D'} - ${sede.indirizzo || sede.ragione_sociale}`,
+          label: `${sede.comune || 'N/D'} - ${sede.indirizzo || sede.ragione_sociale}`,
           isPrincipale: sede.id === clienteIdPrincipale
         }))
 
@@ -369,31 +253,124 @@ export function CustomerAuthProvider({ children }) {
     }
   }
 
+  // ✅ Setup iniziale con protezione race condition
+  useEffect(() => {
+    mountedRef.current = true
+
+    async function initAuth() {
+      try {
+        console.log('🔍 Verifica sessione customer...')
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        if (!mountedRef.current) return
+
+        if (error) {
+          console.error('❌ Errore verifica sessione customer:', error)
+          if (error.message?.includes('refresh_token_not_found') ||
+              error.message?.includes('Invalid Refresh Token')) {
+            await supabase.auth.signOut()
+            setUser(null)
+            setCustomerProfile(null)
+            setSediCollegate([])
+            setSedeAttiva(null)
+          }
+          return
+        }
+
+        if (session?.user) {
+          console.log('✅ Customer sessione attiva:', session.user.email)
+          setUser(session.user)
+          await loadCustomerProfile(session.user.id)
+        } else {
+          console.log('❌ Nessuna customer sessione attiva')
+        }
+      } catch (error) {
+        console.error('❌ Errore verifica customer sessione:', error)
+      } finally {
+        if (mountedRef.current) {
+          initDone.current = true
+          setLoading(false)
+        }
+      }
+    }
+
+    initAuth()
+
+    // Listener per cambio auth
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mountedRef.current) return
+
+        console.log('🔐 Customer Auth event:', event)
+
+        // ✅ FIX: INITIAL_SESSION gestito da initAuth, skip
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
+
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user)
+          // Carica profilo solo se initAuth è completato e non già caricato
+          // NON resettare profileLoadedForUser qui - il reset avviene solo in signIn()
+          if (initDone.current) {
+            await loadCustomerProfile(session.user.id)
+          }
+        }
+        else if (event === 'SIGNED_OUT') {
+          setUser(null)
+          setCustomerProfile(null)
+          setSediCollegate([])
+          setSedeAttiva(null)
+          profileLoadedForUser.current = null
+        }
+        else if (event === 'TOKEN_REFRESHED') {
+          console.log('✅ Customer token refreshed')
+          if (session?.user) {
+            setUser(session.user)
+          }
+        }
+      }
+    )
+
+    // ✅ FIX: Timeout di sicurezza - forza fine loading dopo 6 secondi
+    const safetyTimeout = setTimeout(() => {
+      if (mountedRef.current && !initDone.current) {
+        console.warn('⚠️ Timeout loading customer auth, forcing completion')
+        initDone.current = true
+        setLoading(false)
+      }
+    }, 6000)
+
+    return () => {
+      mountedRef.current = false
+      authListener?.subscription?.unsubscribe()
+      clearTimeout(safetyTimeout)
+    }
+  }, [])
+
   async function refreshProfile() {
     if (!user?.id) return
     console.log('🔄 Ricaricamento profilo cliente...')
-    profileLoadedRef.current = false
-    await loadCustomerProfile(user.id)
-    profileLoadedRef.current = true
+    profileLoadedForUser.current = null
+    await loadCustomerProfile(user.id, true)
   }
 
   async function signIn(email, password) {
     try {
       console.log('🔑 Tentativo login cliente:', email)
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       })
 
       if (error) throw error
-      
+
       if (data.user) {
-        profileLoadedRef.current = false
+        profileLoadedForUser.current = null
         await loadCustomerProfile(data.user.id)
-        profileLoadedRef.current = true
       }
-      
+
       return { data, error: null }
     } catch (error) {
       console.error('❌ Errore login cliente:', error)
@@ -422,12 +399,11 @@ export function CustomerAuthProvider({ children }) {
             email: email,
             attivo: true
           })
-        
+
         if (dbError) throw dbError
-        
-        profileLoadedRef.current = false
+
+        profileLoadedForUser.current = null
         await loadCustomerProfile(authData.user.id)
-        profileLoadedRef.current = true
       }
 
       return { data: authData, error: null }
@@ -442,17 +418,17 @@ export function CustomerAuthProvider({ children }) {
       console.log('👋 Logout cliente...')
       const { error } = await supabase.auth.signOut()
       if (error) throw error
-      
+
       setUser(null)
       setCustomerProfile(null)
       setSediCollegate([])
       setSedeAttiva(null)
-      profileLoadedRef.current = false
-      
+      profileLoadedForUser.current = null
+
       if (typeof window !== 'undefined') {
         localStorage.removeItem('sedeAttiva')
       }
-      
+
       router.push('/portal')
     } catch (error) {
       console.error('❌ Errore logout cliente:', error)

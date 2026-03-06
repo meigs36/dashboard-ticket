@@ -2,13 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Search, HardDrive, MapPin, Calendar, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Search, HardDrive, MapPin, Calendar, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 
 export default function MacchinariPage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [exactTipo, setExactTipo] = useState(null) // filtro esatto tipo_macchinario (da click su stats)
   const [risultati, setRisultati] = useState([])
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 30
   const [stats, setStats] = useState({
     totali: 0,
     attivi: 0,
@@ -16,45 +19,71 @@ export default function MacchinariPage() {
   })
 
   useEffect(() => {
-    loadStats()
+    supabase.auth.getSession().then(() => {
+      loadStats()
+    })
   }, [])
 
   useEffect(() => {
+    setPage(0)
     if (searchTerm.length >= 2) {
+      setExactTipo(null) // ricerca libera annulla filtro esatto
       searchMacchinari()
-    } else {
+    } else if (!exactTipo) {
       setRisultati([])
     }
   }, [searchTerm])
 
+  // Quando si clicca un tipo da "Tipi Più Comuni", cerca per tipo esatto
+  useEffect(() => {
+    if (exactTipo) {
+      setPage(0)
+      searchByExactTipo(exactTipo)
+    }
+  }, [exactTipo])
+
   async function loadStats() {
     try {
-      // Conta totali
-      const { count: totali } = await supabase
-        .from('macchinari')
-        .select('*', { count: 'exact', head: true })
+      // ⚡ Query parallele
+      const [
+        { count: totali },
+        { count: attivi },
+        tipiData
+      ] = await Promise.all([
+        supabase.from('macchinari').select('*', { count: 'exact', head: true }),
+        supabase.from('macchinari').select('*', { count: 'exact', head: true }).eq('stato', 'attivo'),
+        // Carica TUTTI i tipi (paginazione per superare limite 1000)
+        (async () => {
+          let allTipi = []
+          let offset = 0
+          const pageSize = 1000
+          let hasMore = true
+          while (hasMore) {
+            const { data } = await supabase
+              .from('macchinari')
+              .select('tipo_macchinario')
+              .not('tipo_macchinario', 'is', null)
+              .range(offset, offset + pageSize - 1)
+            if (data && data.length > 0) {
+              allTipi = [...allTipi, ...data]
+              offset += pageSize
+              hasMore = data.length === pageSize
+            } else {
+              hasMore = false
+            }
+          }
+          return allTipi
+        })()
+      ])
 
-      const { count: attivi } = await supabase
-        .from('macchinari')
-        .select('*', { count: 'exact', head: true })
-        .eq('stato', 'attivo')
-
-      // Tipi macchinari più comuni
-      const { data: tipiData } = await supabase
-        .from('macchinari')
-        .select('tipo_macchinario')
-        .not('tipo_macchinario', 'is', null)
-        .limit(1000)
-
-      // Conta occorrenze
+      // Conta occorrenze per tipo
       const tipiCount = {}
-      tipiData?.forEach(item => {
+      tipiData.forEach(item => {
         if (item.tipo_macchinario) {
           tipiCount[item.tipo_macchinario] = (tipiCount[item.tipo_macchinario] || 0) + 1
         }
       })
 
-      // Top 10 tipi
       const tipiSorted = Object.entries(tipiCount)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
@@ -73,32 +102,104 @@ export default function MacchinariPage() {
   async function searchMacchinari() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('macchinari')
-        .select(`
-          *,
-          cliente:clienti!macchinari_id_cliente_fkey(
-            id,
-            ragione_sociale,
-            codice_cliente,
-            citta,
-            provincia,
-            telefono_principale,
-            email_riparazioni
-          )
-        `)
-        .or(`tipo_macchinario.ilike.%${searchTerm}%,modello.ilike.%${searchTerm}%,marca.ilike.%${searchTerm}%,numero_seriale.ilike.%${searchTerm}%`)
-        .order('tipo_macchinario')
-        .limit(50)
+      // Paginazione per caricare TUTTI i risultati (supera limite 1000 Supabase)
+      let allData = []
+      let offset = 0
+      const pageSize = 1000
+      let hasMore = true
 
-      if (error) throw error
-      setRisultati(data || [])
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('macchinari')
+          .select(`
+            *,
+            cliente:clienti!macchinari_id_cliente_fkey(
+              id,
+              ragione_sociale,
+              codice_cliente,
+              comune,
+              provincia,
+              telefono_principale,
+              email_riparazioni
+            )
+          `)
+          .or(`tipo_macchinario.ilike.%${searchTerm}%,modello.ilike.%${searchTerm}%,marca.ilike.%${searchTerm}%,numero_seriale.ilike.%${searchTerm}%`)
+          .order('tipo_macchinario')
+          .range(offset, offset + pageSize - 1)
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data]
+          offset += pageSize
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
+      }
+
+      setRisultati(allData)
     } catch (error) {
       console.error('Errore ricerca:', error)
       setRisultati([])
     } finally {
       setLoading(false)
     }
+  }
+
+  // Ricerca per tipo_macchinario esatto (click su stats)
+  async function searchByExactTipo(tipo) {
+    setLoading(true)
+    try {
+      let allData = []
+      let offset = 0
+      const pageSize = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('macchinari')
+          .select(`
+            *,
+            cliente:clienti!macchinari_id_cliente_fkey(
+              id,
+              ragione_sociale,
+              codice_cliente,
+              comune,
+              provincia,
+              telefono_principale,
+              email_riparazioni
+            )
+          `)
+          .eq('tipo_macchinario', tipo)
+          .order('tipo_macchinario')
+          .range(offset, offset + pageSize - 1)
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data]
+          offset += pageSize
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
+      }
+
+      setRisultati(allData)
+    } catch (error) {
+      console.error('Errore ricerca per tipo:', error)
+      setRisultati([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Cancella filtro esatto e torna alla ricerca libera
+  function clearExactTipo() {
+    setExactTipo(null)
+    setSearchTerm('')
+    setRisultati([])
   }
 
   return (
@@ -140,8 +241,12 @@ export default function MacchinariPage() {
               {stats.tipi.slice(0, 5).map((tipo, idx) => (
                 <div key={idx} className="flex justify-between items-center text-sm">
                   <button
-                    onClick={() => setSearchTerm(tipo.tipo)}
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline text-left"
+                    onClick={() => { setSearchTerm(''); setExactTipo(tipo.tipo) }}
+                    className={`hover:text-blue-700 dark:hover:text-blue-300 hover:underline text-left ${
+                      exactTipo === tipo.tipo
+                        ? 'text-blue-800 dark:text-blue-300 font-semibold'
+                        : 'text-blue-600 dark:text-blue-400'
+                    }`}
                   >
                     {tipo.tipo}
                   </button>
@@ -180,13 +285,50 @@ export default function MacchinariPage() {
         ) : risultati.length > 0 ? (
           <>
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-4">
-              <p className="text-gray-700 dark:text-gray-300">
-                Trovati <strong>{risultati.length}</strong> macchinari corrispondenti a &quot;{searchTerm}&quot;
-              </p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <p className="text-gray-700 dark:text-gray-300">
+                    {exactTipo ? (
+                      <>Trovati <strong>{risultati.length}</strong> macchinari di tipo <strong>&quot;{exactTipo}&quot;</strong></>
+                    ) : (
+                      <>Trovati <strong>{risultati.length}</strong> macchinari corrispondenti a &quot;{searchTerm}&quot;</>
+                    )}
+                  </p>
+                  {exactTipo && (
+                    <button
+                      onClick={clearExactTipo}
+                      className="px-3 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                    >
+                      ✕ Rimuovi filtro
+                    </button>
+                  )}
+                </div>
+                {risultati.length > PAGE_SIZE && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, risultati.length)} di {risultati.length}
+                    </span>
+                    <button
+                      onClick={() => setPage(p => Math.min(Math.ceil(risultati.length / PAGE_SIZE) - 1, p + 1))}
+                      disabled={page >= Math.ceil(risultati.length / PAGE_SIZE) - 1}
+                      className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-4">
-              {risultati.map((macchinario) => (
+              {risultati.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((macchinario) => (
                 <div
                   key={macchinario.id}
                   className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow"
@@ -255,10 +397,10 @@ export default function MacchinariPage() {
                                 Cod. {macchinario.cliente.codice_cliente}
                               </p>
                             </div>
-                            {macchinario.cliente.citta && (
+                            {macchinario.cliente.comune && (
                               <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
                                 <MapPin size={14} />
-                                <span>{macchinario.cliente.citta} ({macchinario.cliente.provincia})</span>
+                                <span>{macchinario.cliente.comune} ({macchinario.cliente.provincia})</span>
                               </div>
                             )}
                           </div>
@@ -276,8 +418,36 @@ export default function MacchinariPage() {
                 </div>
               ))}
             </div>
+
+            {/* Paginazione in fondo */}
+            {risultati.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, risultati.length)} di {risultati.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setPage(p => Math.max(0, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                    disabled={page === 0}
+                    className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Pagina {page + 1} / {Math.ceil(risultati.length / PAGE_SIZE)}
+                  </span>
+                  <button
+                    onClick={() => { setPage(p => Math.min(Math.ceil(risultati.length / PAGE_SIZE) - 1, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                    disabled={page >= Math.ceil(risultati.length / PAGE_SIZE) - 1}
+                    className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
-        ) : searchTerm.length >= 2 ? (
+        ) : (searchTerm.length >= 2 || exactTipo) ? (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
             <Search className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size={48} />
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -286,6 +456,14 @@ export default function MacchinariPage() {
             <p className="text-gray-600 dark:text-gray-400">
               Prova con altri termini di ricerca
             </p>
+            {exactTipo && (
+              <button
+                onClick={clearExactTipo}
+                className="mt-4 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Rimuovi filtro
+              </button>
+            )}
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">

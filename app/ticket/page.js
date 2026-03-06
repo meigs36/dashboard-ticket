@@ -51,8 +51,10 @@ export default function TicketPage() {
   })
 
   useEffect(() => {
-    loadTickets()
-    loadTecnici()  // ⚡ NUOVO: Carica tecnici all'avvio
+    supabase.auth.getSession().then(() => {
+      loadTickets()
+      loadTecnici()
+    })
   }, [])
 
   useEffect(() => {
@@ -87,7 +89,7 @@ export default function TicketPage() {
           codice_cliente,
           telefono_principale,
           email_riparazioni,
-          citta,
+          comune,
           provincia
         ),
         macchinari(

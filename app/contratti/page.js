@@ -23,7 +23,7 @@ export default function ContrattiPage() {
   const [contrattoSelezionato, setContrattoSelezionato] = useState(null)
 
   useEffect(() => {
-    loadContratti()
+    supabase.auth.getSession().then(() => loadContratti())
   }, [])
 
   async function loadContratti() {
@@ -36,7 +36,7 @@ export default function ContrattiPage() {
           cliente:clienti!contratti_codice_cliente_fkey(
             codice_cliente,
             ragione_sociale,
-            citta
+            comune
           )
         `)
         .order('data_contratto', { ascending: false })

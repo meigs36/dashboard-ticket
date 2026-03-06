@@ -78,7 +78,7 @@ export default function InfrastrutturaForm({ clienteId }) {
       // Prima carica il cliente corrente per ottenere la partita_iva
       const { data: clienteCorrente, error: errCliente } = await supabase
         .from('clienti')
-        .select('id, ragione_sociale, codice_cliente, citta, partita_iva, indirizzo, provincia')
+        .select('id, ragione_sociale, codice_cliente, comune, partita_iva, indirizzo, provincia')
         .eq('id', clienteId)
         .single()
       
@@ -87,9 +87,9 @@ export default function InfrastrutturaForm({ clienteId }) {
       // Cerca tutte le sedi con stessa partita_iva
       const { data: sedi, error: errSedi } = await supabase
         .from('clienti')
-        .select('id, ragione_sociale, codice_cliente, citta, indirizzo, provincia')
+        .select('id, ragione_sociale, codice_cliente, comune, indirizzo, provincia')
         .eq('partita_iva', clienteCorrente.partita_iva)
-        .order('citta')
+        .order('comune')
       
       if (errSedi) throw errSedi
       
@@ -475,7 +475,7 @@ export default function InfrastrutturaForm({ clienteId }) {
               >
                 <div className="flex items-center gap-2">
                   <MapPin size={14} />
-                  <span>{sede.citta}</span>
+                  <span>{sede.comune}</span>
                   <span className="text-xs opacity-70">({sede.codice_cliente})</span>
                 </div>
               </button>
@@ -483,7 +483,7 @@ export default function InfrastrutturaForm({ clienteId }) {
           </div>
           {sedeSelezionata && (
             <p className="mt-2 text-sm text-purple-700 dark:text-purple-400">
-              📍 {sedeSelezionata.indirizzo}, {sedeSelezionata.citta} ({sedeSelezionata.provincia})
+              📍 {sedeSelezionata.indirizzo}, {sedeSelezionata.comune} ({sedeSelezionata.provincia})
             </p>
           )}
         </div>
@@ -863,7 +863,7 @@ export default function InfrastrutturaForm({ clienteId }) {
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex items-center gap-2 mb-2">
           <h3 className="font-semibold text-gray-900 dark:text-white">
-            ⚙️ Infrastruttura Generale {isMultiSede && sedeSelezionata ? `- ${sedeSelezionata.citta}` : ''}
+            ⚙️ Infrastruttura Generale {isMultiSede && sedeSelezionata ? `- ${sedeSelezionata.comune}` : ''}
           </h3>
         </div>
 

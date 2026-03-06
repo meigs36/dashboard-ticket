@@ -88,7 +88,7 @@ export default function GeneraFatturaModal({
 
   // Calcola distanza cliente on-demand
   async function calcolaDistanza() {
-    if (!cliente?.id || !cliente?.indirizzo || !cliente?.citta) {
+    if (!cliente?.id || !cliente?.indirizzo || !cliente?.comune) {
       alert('Dati indirizzo cliente incompleti')
       return
     }
@@ -104,7 +104,7 @@ export default function GeneraFatturaModal({
           cliente_id: cliente.id,
           indirizzo: cliente.indirizzo,
           cap: cliente.cap || '',
-          citta: cliente.citta
+          comune: cliente.comune
         })
       })
 
@@ -358,7 +358,7 @@ export default function GeneraFatturaModal({
                 id: cliente.id,
                 ragione_sociale: cliente.ragione_sociale,
                 indirizzo: cliente.via,
-                citta: cliente.citta,
+                comune: cliente.comune,
                 cap: cliente.cap,
                 partita_iva: cliente.partita_iva,
                 codice_fiscale: cliente.codice_fiscale,
@@ -457,7 +457,7 @@ export default function GeneraFatturaModal({
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {cliente?.indirizzo && `${cliente.indirizzo}, `}
-                  {cliente?.cap} {cliente?.citta}
+                  {cliente?.cap} {cliente?.comune}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   P.IVA: {cliente?.partita_iva || 'N/D'}

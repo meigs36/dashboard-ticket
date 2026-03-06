@@ -24,7 +24,7 @@ function UtentiPage() {
   })
 
   useEffect(() => {
-    loadUtenti()
+    supabase.auth.getSession().then(() => loadUtenti())
   }, [])
 
   async function loadUtenti() {

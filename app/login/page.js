@@ -11,16 +11,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { signIn, user, userProfile } = useAuth()
+  const { signIn, user, userProfile, loading: authLoading } = useAuth()
   const router = useRouter()
 
-  // Redirect se già autenticato
+  // Redirect se già autenticato (anche mentre userProfile sta caricando)
   useEffect(() => {
+    if (authLoading) return // Aspetta che AuthContext finisca il check sessione
     if (user && userProfile) {
       console.log('✅ Utente già autenticato, redirect a dashboard')
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     }
-  }, [user, userProfile, router])
+  }, [user, userProfile, authLoading])
 
   async function handleSubmit(e) {
     e.preventDefault()

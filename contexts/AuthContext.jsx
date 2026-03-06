@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
 
@@ -21,34 +21,143 @@ export function AuthProvider({ children }) {
   const router = useRouter()
   const pathname = usePathname()
 
-  // ✅ FIX: Skip AuthContext su rotte /portal
+  // ✅ Skip AuthContext su rotte /portal
   const isPortalRoute = pathname?.startsWith('/portal')
 
+  // ✅ FIX: Refs per evitare race condition e chiamate duplicate
+  const isLoadingProfile = useRef(false)
+  const profileLoadedForUser = useRef(null)
+  const initDone = useRef(false)
+  const mountedRef = useRef(true)
+
+  const loadUserProfile = useCallback(async (userId) => {
+    if (isPortalRoute) return
+
+    // Guard: evita chiamate duplicate simultanee
+    if (isLoadingProfile.current) {
+      console.log('⏳ Profilo già in caricamento, skip')
+      return
+    }
+    // Guard: evita ricaricamento se già caricato per questo utente
+    if (profileLoadedForUser.current === userId) {
+      console.log('✅ Profilo già caricato per questo utente')
+      return
+    }
+
+    isLoadingProfile.current = true
+
+    try {
+      console.log('📊 Caricamento profilo utente:', userId)
+
+      const { data: userData, error: userError } = await supabase
+        .from('utenti')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (!mountedRef.current) return
+
+      if (userError) {
+        console.error('⚠️ Profilo non trovato nel DB:', userError)
+        setUserProfile({ id: userId, _isVirtual: true })
+        return
+      }
+
+      if (!userData) {
+        console.error('❌ User data è null')
+        setUserProfile(null)
+        return
+      }
+
+      console.log('✅ Profilo utente caricato:', userData.email)
+
+      if (!userData.attivo) {
+        console.error('❌ Account disattivato')
+        setUserProfile(null)
+        router.push('/unauthorized')
+        return
+      }
+
+      setUserProfile(userData)
+      profileLoadedForUser.current = userId
+
+    } catch (error) {
+      console.error('❌ Errore caricamento profilo utente:', error)
+      if (mountedRef.current) setUserProfile(null)
+    } finally {
+      isLoadingProfile.current = false
+    }
+  }, [isPortalRoute, router])
+
   useEffect(() => {
-    // ✅ Se siamo su /portal, usa CustomerAuthContext invece
+    mountedRef.current = true
+
     if (isPortalRoute) {
       setLoading(false)
       return
     }
 
-    // Verifica sessione iniziale
-    checkSession()
+    // ✅ Inizializzazione auth con protezione race condition
+    async function initAuth() {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        if (!mountedRef.current) return
+
+        if (error) {
+          console.error('❌ Errore verifica sessione:', error)
+          if (error.message?.includes('refresh_token_not_found') ||
+              error.message?.includes('Invalid Refresh Token')) {
+            await supabase.auth.signOut()
+            setUser(null)
+            setUserProfile(null)
+          }
+          return
+        }
+
+        if (session?.user) {
+          console.log('✅ Sessione attiva:', session.user.email)
+          setUser(session.user)
+          await loadUserProfile(session.user.id)
+        } else {
+          console.log('❌ Nessuna sessione attiva')
+        }
+      } catch (error) {
+        console.error('❌ Errore verifica sessione:', error)
+      } finally {
+        if (mountedRef.current) {
+          initDone.current = true
+          setLoading(false)
+        }
+      }
+    }
+
+    initAuth()
 
     // Listener per cambio auth
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // ✅ Skip se siamo su /portal
-        if (isPortalRoute) return
+        if (!mountedRef.current || isPortalRoute) return
 
         console.log('🔐 Auth event:', event)
-        
+
+        // ✅ FIX: INITIAL_SESSION gestito da initAuth, skip per evitare doppio load
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
+
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user)
-          await loadUserProfile(session.user.id)
-        } 
+          // Carica profilo solo se initAuth è completato e non già caricato
+          // NON resettare profileLoadedForUser qui - il reset avviene solo in signIn()
+          if (initDone.current) {
+            await loadUserProfile(session.user.id)
+          }
+        }
         else if (event === 'SIGNED_OUT') {
           setUser(null)
           setUserProfile(null)
+          profileLoadedForUser.current = null
         }
         else if (event === 'TOKEN_REFRESHED') {
           console.log('✅ Token refreshed')
@@ -59,102 +168,27 @@ export function AuthProvider({ children }) {
       }
     )
 
+    // ✅ FIX: Timeout di sicurezza - forza fine loading dopo 6 secondi
+    const safetyTimeout = setTimeout(() => {
+      if (mountedRef.current && !initDone.current) {
+        console.warn('⚠️ Timeout loading auth, forcing completion')
+        initDone.current = true
+        setLoading(false)
+      }
+    }, 6000)
+
     return () => {
+      mountedRef.current = false
       authListener?.subscription?.unsubscribe()
+      clearTimeout(safetyTimeout)
     }
-  }, [isPortalRoute])
-
-  async function checkSession() {
-    // ✅ Skip se siamo su /portal
-    if (isPortalRoute) {
-      setLoading(false)
-      return
-    }
-
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('❌ Errore verifica sessione:', error)
-        
-        if (error.message?.includes('refresh_token_not_found') || 
-            error.message?.includes('Invalid Refresh Token')) {
-          console.error('❌ Refresh token not found, clearing session')
-          await supabase.auth.signOut()
-          setUser(null)
-          setUserProfile(null)
-          setLoading(false)
-          return
-        }
-        
-        throw error
-      }
-      
-      if (session?.user) {
-        console.log('✅ Sessione attiva:', session.user.email)
-        setUser(session.user)
-        await loadUserProfile(session.user.id)
-      } else {
-        console.log('❌ Nessuna sessione attiva')
-      }
-    } catch (error) {
-      console.error('❌ Errore verifica sessione:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function loadUserProfile(userId) {
-    // ✅ Skip se siamo su /portal
-    if (isPortalRoute) return
-
-    try {
-      console.log('📊 Caricamento profilo utente:', userId)
-      
-      // Cerca in utenti (admin/tecnici)
-      const { data: userData, error: userError } = await supabase
-        .from('utenti')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
-
-      if (userError) {
-        console.error('⚠️ Profilo non trovato nel DB:', userError)
-        console.log('⚠️ Usando profilo virtuale temporaneo')
-        setUserProfile({
-          id: userId,
-          _isVirtual: true
-        })
-        return
-      }
-
-      if (!userData) {
-        console.error('❌ User data è null')
-        setUserProfile(null)
-        return
-      }
-
-      console.log('✅ Profilo utente caricato:', userData)
-      
-      if (!userData.attivo) {
-        console.error('❌ Account disattivato')
-        setUserProfile(null)
-        router.push('/unauthorized')
-        return
-      }
-
-      setUserProfile(userData)
-      
-    } catch (error) {
-      console.error('❌ Errore caricamento profilo utente:', error)
-      setUserProfile(null)
-    }
-  }
+  }, [isPortalRoute, loadUserProfile])
 
   async function refreshProfile() {
     if (!user?.id || isPortalRoute) return
-    
+
     console.log('🔄 Ricaricamento profilo utente...')
+    profileLoadedForUser.current = null
     await loadUserProfile(user.id)
   }
 
@@ -180,9 +214,10 @@ export function AuthProvider({ children }) {
       console.log('✅ Auth successful:', data.user.email)
       
       if (data.user) {
+        profileLoadedForUser.current = null // forza reload su nuovo login
         await loadUserProfile(data.user.id)
       }
-      
+
       return { data, error: null }
     } catch (error) {
       console.error('❌ Errore login:', error)

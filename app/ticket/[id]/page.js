@@ -47,8 +47,10 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     if (ticketId) {
-      loadTicket()
-      loadNoteTicket()  // AGGIUNTO
+      supabase.auth.getSession().then(() => {
+        loadTicket()
+        loadNoteTicket()
+      })
     }
   }, [ticketId])
 
@@ -383,7 +385,7 @@ export default function TicketDetailPage() {
                       <MapPin size={16} className="text-gray-400 mt-0.5" />
                       <p className="text-sm text-gray-700 dark:text-gray-300">
                         {cliente.indirizzo}
-                        {cliente.citta && `, ${cliente.citta}`}
+                        {cliente.comune && `, ${cliente.comune}`}
                         {cliente.provincia && ` (${cliente.provincia})`}
                       </p>
                     </div>

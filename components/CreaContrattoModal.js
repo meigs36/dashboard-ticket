@@ -30,7 +30,7 @@ export default function CreaContrattoModal({ onClose, onSuccess }) {
     try {
       const { data, error } = await supabase
         .from('clienti')
-        .select('id, codice_cliente, ragione_sociale, citta')
+        .select('id, codice_cliente, ragione_sociale, comune')
         .eq('attivo', true)
         .order('ragione_sociale')
 
@@ -156,7 +156,7 @@ export default function CreaContrattoModal({ onClose, onSuccess }) {
               <option value="">Seleziona cliente...</option>
               {clienti.map((cliente) => (
                 <option key={cliente.id} value={cliente.codice_cliente}>
-                  {cliente.ragione_sociale} - {cliente.citta} ({cliente.codice_cliente})
+                  {cliente.ragione_sociale} - {cliente.comune} ({cliente.codice_cliente})
                 </option>
               ))}
             </select>

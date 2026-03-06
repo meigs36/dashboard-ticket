@@ -9,6 +9,7 @@ import TicketActionsModal from '@/components/TicketActionsModal'
 import ContrattoModal from '@/components/ContrattoModal'
 import InfrastrutturaForm from '@/components/InfrastrutturaForm'
 import LibroMacchinePDF from '@/components/LibroMacchinePDF'
+import { scaricaConsensoPDF } from '@/lib/generaConsensoPDF'
 
 export default function ClienteDettaglio() {
   const params = useParams()
@@ -37,7 +38,7 @@ export default function ClienteDettaglio() {
 
   useEffect(() => {
     if (params.id) {
-      loadCliente()
+      supabase.auth.getSession().then(() => loadCliente())
     }
   }, [params.id])
 
@@ -1444,26 +1445,52 @@ if (contrattiError) {
                           {/* Footer con azioni */}
                           <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
                             <div className="flex items-center gap-4">
-                              {consenso.pdf_storage_path && (
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      const { data } = await supabase.storage
+                              {/* Genera PDF al volo dai dati del consenso */}
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    // Recupera firma grafica dallo storage
+                                    let firmaDataUrl = null
+                                    if (consenso.firma_grafica_url) {
+                                      const { data: firmaData } = await supabase.storage
                                         .from('customer-documents')
-                                        .createSignedUrl(consenso.pdf_storage_path, 300)
-                                      if (data?.signedUrl) {
-                                        window.open(data.signedUrl, '_blank')
+                                        .createSignedUrl(consenso.firma_grafica_url, 60)
+                                      if (firmaData?.signedUrl) {
+                                        const resp = await fetch(firmaData.signedUrl)
+                                        const blob = await resp.blob()
+                                        firmaDataUrl = await new Promise((resolve) => {
+                                          const reader = new FileReader()
+                                          reader.onloadend = () => resolve(reader.result)
+                                          reader.readAsDataURL(blob)
+                                        })
                                       }
-                                    } catch (err) {
-                                      console.error('Errore download PDF:', err)
                                     }
-                                  }}
-                                  className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                                >
-                                  <Download size={16} />
-                                  Scarica PDF
-                                </button>
-                              )}
+
+                                    await scaricaConsensoPDF({
+                                      cliente,
+                                      firmatoDaNome: consenso.firmato_da_nome || '',
+                                      firmatoDaRuolo: consenso.firmato_da_ruolo || '',
+                                      tecnicoNome: consenso.tecnico ? `${consenso.tecnico.cognome} ${consenso.tecnico.nome}` : 'N/D',
+                                      firmaDataUrl,
+                                      hash: consenso.documento_hash || '',
+                                      consensi: {
+                                        accesso_remoto: consenso.consenso_accesso_remoto,
+                                        dati_sanitari: consenso.consenso_dati_sanitari,
+                                        modalita_accesso: consenso.consenso_modalita_accesso,
+                                        autorizzazione_titolare: consenso.consenso_autorizzazione_titolare
+                                      },
+                                      note: consenso.note || '',
+                                      ipAddress: consenso.ip_address || null
+                                    })
+                                  } catch (err) {
+                                    console.error('Errore generazione PDF:', err)
+                                  }
+                                }}
+                                className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                              >
+                                <Download size={16} />
+                                Scarica PDF
+                              </button>
                               {consenso.firma_grafica_url && (
                                 <button
                                   onClick={async () => {

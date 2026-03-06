@@ -55,7 +55,7 @@ export default function ClienteSearchSelect({
     try {
       const { data, error } = await supabase
         .from('clienti')
-        .select('id, ragione_sociale, codice_cliente, citta, provincia')
+        .select('id, ragione_sociale, codice_cliente, comune, provincia')
         .eq('id', id)
         .single()
 
@@ -72,9 +72,9 @@ export default function ClienteSearchSelect({
     try {
       const { data, error } = await supabase
         .from('clienti')
-        .select('id, ragione_sociale, codice_cliente, citta, provincia, telefono_principale')
+        .select('id, ragione_sociale, codice_cliente, comune, provincia, telefono_principale')
         .eq('attivo', true)
-        .or(`ragione_sociale.ilike.%${searchTerm}%,codice_cliente.ilike.%${searchTerm}%,citta.ilike.%${searchTerm}%`)
+        .or(`ragione_sociale.ilike.%${searchTerm}%,codice_cliente.ilike.%${searchTerm}%,comune.ilike.%${searchTerm}%`)
         .order('ragione_sociale')
         .limit(20)
 
@@ -126,7 +126,7 @@ export default function ClienteSearchSelect({
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {selectedCliente.codice_cliente}
-                {selectedCliente.citta && ` • ${selectedCliente.citta}`}
+                {selectedCliente.comune && ` • ${selectedCliente.comune}`}
                 {selectedCliente.provincia && ` (${selectedCliente.provincia})`}
               </p>
             </div>
@@ -192,12 +192,12 @@ export default function ClienteSearchSelect({
                       </p>
                       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                         <span className="font-mono">{cliente.codice_cliente}</span>
-                        {cliente.citta && (
+                        {cliente.comune && (
                           <>
                             <span>•</span>
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
-                              {cliente.citta} {cliente.provincia && `(${cliente.provincia})`}
+                              {cliente.comune} {cliente.provincia && `(${cliente.provincia})`}
                             </span>
                           </>
                         )}

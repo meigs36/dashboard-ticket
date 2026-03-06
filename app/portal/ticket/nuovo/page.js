@@ -56,7 +56,7 @@ function NuovoTicketForm() {
   const clienteId = sedeAttiva?.id || customerProfile?.cliente_id
   const clienteNome = sedeAttiva?.ragione_sociale || customerProfile?.ragione_sociale
   const clienteCodice = sedeAttiva?.codice_cliente || customerProfile?.codice_cliente
-  const clienteCitta = sedeAttiva?.citta
+  const clienteCitta = sedeAttiva?.comune
 
   // Carica macchinari del cliente
   useEffect(() => {

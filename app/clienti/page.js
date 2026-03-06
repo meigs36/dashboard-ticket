@@ -231,93 +231,96 @@ export default function ClientiPage() {
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
-    loadData()
+    // Aspetta che Supabase abbia recuperato la sessione prima di fare query
+    // Senza questo, dopo ⌘R le query partono prima che il token sia pronto
+    supabase.auth.getSession().then(() => {
+      loadData()
+    })
   }, [])
 
   async function loadData() {
     try {
       setLoading(true)
-      
-      // Carica clienti
-      const { data: clientiData, error: clientiError } = await supabase
-        .from('clienti')
-        .select('*')
-        .order('ragione_sociale')
 
-      if (clientiError) throw clientiError
+      // Helper: carica tutti i record paginando per superare il limite 1000 di Supabase
+      async function fetchAllPaginated(table, selectFields, orderField, filters) {
+        let allData = []
+        let offset = 0
+        const pageSize = 1000
+        let hasMore = true
+        while (hasMore) {
+          let query = supabase.from(table).select(selectFields)
+          if (orderField) query = query.order(orderField.field, orderField.options || {})
+          if (filters) filters.forEach(f => { query = query[f.method](f.column, f.value) })
+          query = query.range(offset, offset + pageSize - 1)
+          const { data, error } = await query
+          if (error) throw error
+          if (data && data.length > 0) {
+            allData = [...allData, ...data]
+            offset += pageSize
+            hasMore = data.length === pageSize
+          } else {
+            hasMore = false
+          }
+        }
+        return allData
+      }
 
-      // Carica utenti portale
-      let usersData = []
-      try {
-        const { data, error } = await supabase
+      // ⚡ Tutte le query in PARALLELO (prima erano sequenziali!)
+      const [clientiData, usersData, macchinariCounts, contrattiList, consensiList] = await Promise.all([
+        // 1. Clienti (paginato)
+        fetchAllPaginated('clienti', '*', { field: 'ragione_sociale' }),
+
+        // 2. Utenti portale
+        supabase
           .from('customer_portal_users')
           .select('id, cliente_id, email, attivo')
-        if (!error) usersData = data || []
-      } catch (e) {
-        console.log('Tabella customer_portal_users non disponibile')
-      }
+          .then(({ data }) => data || [])
+          .catch(() => []),
 
-      // Carica conteggio macchinari per cliente
-      const { data: macchinariData } = await supabase
-        .from('macchinari')
-        .select('id_cliente')
+        // 3. Conteggio macchinari via RPC
+        supabase.rpc('count_macchinari_per_cliente')
+          .then(({ data }) => data || []),
 
-      // Conta macchinari per cliente
-      const macchinariPerCliente = {}
-      if (macchinariData) {
-        macchinariData.forEach(m => {
-          if (m.id_cliente) {
-            macchinariPerCliente[m.id_cliente] = (macchinariPerCliente[m.id_cliente] || 0) + 1
-          }
-        })
-      }
+        // 4. Contratti attivi
+        supabase
+          .from('contratti')
+          .select('*')
+          .eq('stato', 'attivo')
+          .order('data_scadenza', { ascending: true })
+          .then(({ data }) => data || []),
 
-      // Carica contratti attivi per cliente
-      const { data: contrattiList } = await supabase
-        .from('contratti')
-        .select('*')
-        .eq('stato', 'attivo')
-        .order('data_scadenza', { ascending: true })
-
-      // Organizza contratti per cliente (prendi il primo attivo)
-      const contrattiPerCliente = {}
-      if (contrattiList) {
-        contrattiList.forEach(c => {
-          if (c.id_cliente && !contrattiPerCliente[c.id_cliente]) {
-            contrattiPerCliente[c.id_cliente] = c
-          }
-        })
-      }
-
-      // Conta contratti per cliente
-      const contrattiCountPerCliente = {}
-      if (contrattiList) {
-        contrattiList.forEach(c => {
-          if (c.id_cliente) {
-            contrattiCountPerCliente[c.id_cliente] = (contrattiCountPerCliente[c.id_cliente] || 0) + 1
-          }
-        })
-      }
-
-      // Carica consensi accesso remoto (ultimo valido per cliente)
-      let consensiPerCliente = {}
-      try {
-        const { data: consensiList, error: consensiError } = await supabase
+        // 5. Consensi accesso remoto
+        supabase
           .from('consensi_accesso_remoto')
           .select('id, cliente_id, created_at, firmato_da_nome, revocato_il')
           .is('revocato_il', null)
           .order('created_at', { ascending: false })
+          .then(({ data }) => data || [])
+          .catch(() => [])
+      ])
 
-        if (!consensiError && consensiList) {
-          consensiList.forEach(c => {
-            if (c.cliente_id && !consensiPerCliente[c.cliente_id]) {
-              consensiPerCliente[c.cliente_id] = c
-            }
-          })
+      // Processa i risultati (operazioni in memoria, istantanee)
+      const macchinariPerCliente = {}
+      macchinariCounts.forEach(r => {
+        macchinariPerCliente[r.id_cliente] = r.count
+      })
+
+      const contrattiPerCliente = {}
+      const contrattiCountPerCliente = {}
+      contrattiList.forEach(c => {
+        if (c.id_cliente) {
+          if (!contrattiPerCliente[c.id_cliente]) contrattiPerCliente[c.id_cliente] = c
+          contrattiCountPerCliente[c.id_cliente] = (contrattiCountPerCliente[c.id_cliente] || 0) + 1
         }
-      } catch (e) {
-        console.log('Tabella consensi_accesso_remoto non disponibile')
-      }
+      })
+
+      const consensiPerCliente = {}
+      consensiList.forEach(c => {
+        if (c.cliente_id && !consensiPerCliente[c.cliente_id]) {
+          consensiPerCliente[c.cliente_id] = c
+        }
+      })
 
       setClienti(clientiData || [])
       setPortalUsers(usersData)
@@ -370,14 +373,23 @@ export default function ClientiPage() {
   }
 
   // Filtra clienti
-  const filteredClienti = clienti.filter(cliente =>
-    cliente.ragione_sociale?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.ragione_sociale_operativa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.codice_cliente?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.comune?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.comune_operativo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.email_principale?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredClienti = clienti.filter(cliente => {
+    if (!searchTerm.trim()) return true
+    const term = searchTerm.toLowerCase().trim()
+    return (
+      (cliente.ragione_sociale || '').toLowerCase().includes(term) ||
+      (cliente.ragione_sociale_operativa || '').toLowerCase().includes(term) ||
+      (cliente.codice_cliente || '').toLowerCase().includes(term) ||
+      (cliente.comune || '').toLowerCase().includes(term) ||
+      (cliente.comune_operativo || '').toLowerCase().includes(term) ||
+      (cliente.email_principale || '').toLowerCase().includes(term) ||
+      (cliente.indirizzo || '').toLowerCase().includes(term) ||
+      (cliente.indirizzo_operativo || '').toLowerCase().includes(term) ||
+      (cliente.provincia || '').toLowerCase().includes(term) ||
+      (cliente.provincia_operativa || '').toLowerCase().includes(term) ||
+      (cliente.telefono_principale || '').toLowerCase().includes(term)
+    )
+  })
 
   if (loading) {
     return (
@@ -423,13 +435,18 @@ export default function ClientiPage() {
           <div className="relative">
             <input
               type="text"
-              placeholder="Cerca per ragione sociale, codice cliente, città o email..."
+              placeholder="Cerca per ragione sociale, codice, città, indirizzo, email, telefono..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
             />
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
           </div>
+          {searchTerm.trim() && (
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {filteredClienti.length} risultat{filteredClienti.length === 1 ? 'o' : 'i'} per "<span className="font-medium text-gray-700 dark:text-gray-300">{searchTerm.trim()}</span>"
+            </p>
+          )}
         </div>
 
         {/* Clienti Grid */}
@@ -450,13 +467,67 @@ export default function ClientiPage() {
               const numContratti = contrattiData.count?.[cliente.id] || 0
               const contrattoAttivo = contrattiData.contratti?.[cliente.id]
               const consensoCliente = consensiData[cliente.id] || null
-              
+
+              // Mostra in quale campo è stato trovato il match (se non ovvio)
+              // Per le filiali, la card mostra comune_operativo, NON comune (sede legale)
+              const isFiliale = cliente.indirizzo_operativo && cliente.indirizzo_operativo !== cliente.indirizzo
+              let searchMatchInfo = null
+              if (searchTerm.trim()) {
+                const term = searchTerm.toLowerCase().trim()
+                // Campi effettivamente visibili nella card
+                const visibleFields = [
+                  cliente.ragione_sociale, cliente.codice_cliente, cliente.telefono_principale
+                ]
+                // Per le filiali si mostra comune_operativo, per le sedi si mostra comune
+                if (isFiliale) {
+                  visibleFields.push(cliente.comune_operativo)
+                } else {
+                  visibleFields.push(cliente.comune)
+                }
+                const isVisibleMatch = visibleFields.some(f => (f || '').toLowerCase().includes(term))
+
+                if (!isVisibleMatch) {
+                  // Match è in un campo non direttamente visibile nella card
+                  const hiddenMatches = []
+                  if ((cliente.ragione_sociale_operativa || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Rag. sociale op.: ${cliente.ragione_sociale_operativa}`)
+                  // Per filiali, comune (sede legale) non è visibile
+                  if (isFiliale && (cliente.comune || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Sede legale: ${cliente.comune}`)
+                  // Per sedi, comune_operativo non è visibile
+                  if (!isFiliale && (cliente.comune_operativo || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Comune op.: ${cliente.comune_operativo}`)
+                  if ((cliente.indirizzo || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Indirizzo: ${cliente.indirizzo}`)
+                  if ((cliente.indirizzo_operativo || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Indirizzo op.: ${cliente.indirizzo_operativo}`)
+                  if ((cliente.email_principale || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Email: ${cliente.email_principale}`)
+                  if ((cliente.provincia || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Provincia: ${cliente.provincia}`)
+                  if ((cliente.provincia_operativa || '').toLowerCase().includes(term))
+                    hiddenMatches.push(`Provincia op.: ${cliente.provincia_operativa}`)
+                  if (hiddenMatches.length > 0) {
+                    searchMatchInfo = hiddenMatches[0]
+                  }
+                }
+              }
+
               return (
                 <Link
                   key={cliente.id}
                   href={`/clienti/${cliente.id}`}
                   className="group bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200"
                 >
+                  {/* Indicatore match ricerca */}
+                  {searchMatchInfo && (
+                    <div className="mb-3 px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400 truncate">
+                        <Search size={12} className="inline mr-1" />
+                        Trovato in: {searchMatchInfo}
+                      </p>
+                    </div>
+                  )}
                   {/* Header Card */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">

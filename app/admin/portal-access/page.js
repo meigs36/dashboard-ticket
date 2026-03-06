@@ -55,7 +55,7 @@ export default function PortalAccessPage() {
   })
 
   useEffect(() => {
-    loadData()
+    supabase.auth.getSession().then(() => loadData())
   }, [])
 
   async function loadData() {
@@ -434,10 +434,10 @@ export default function PortalAccessPage() {
                               {cliente.telefono_principale}
                             </span>
                           )}
-                          {cliente.citta && (
+                          {cliente.comune && (
                             <span className="flex items-center gap-1">
                               <Building2 size={14} />
-                              {cliente.citta}
+                              {cliente.comune}
                             </span>
                           )}
                         </div>

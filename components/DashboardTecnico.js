@@ -47,7 +47,7 @@ export default function DashboardTecnico() {
             codice_cliente,
             telefono_principale,
             email_riparazioni,
-            citta,
+            comune,
             provincia
           ),
           macchinari(

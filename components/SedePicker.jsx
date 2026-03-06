@@ -56,7 +56,7 @@ export default function SedePicker({ className = '' }) {
           <div className="text-left flex-1 min-w-0">
             <p className="text-xs text-gray-500 leading-none">Sede</p>
             <p className="text-sm font-medium text-gray-900 truncate">
-              {sedeAttiva.citta || 'N/D'}
+              {sedeAttiva.comune || 'N/D'}
             </p>
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function SedePicker({ className = '' }) {
                       <p className={`text-sm font-medium truncate ${
                         isSelected ? 'text-blue-900' : 'text-gray-900'
                       }`}>
-                        {sede.citta || 'N/D'}
+                        {sede.comune || 'N/D'}
                         {sede.isPrincipale && (
                           <span className="ml-2 text-xs text-gray-500 font-normal">
                             (principale)
@@ -168,7 +168,7 @@ export function SedePickerCompact({ className = '' }) {
     >
       {sediCollegate.map((sede) => (
         <option key={sede.id} value={sede.id}>
-          📍 {sede.citta} - {sede.codice_cliente}
+          📍 {sede.comune} - {sede.codice_cliente}
         </option>
       ))}
     </select>
@@ -189,7 +189,7 @@ export function SedeBadge({ className = '' }) {
   return (
     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium ${className}`}>
       <MapPin className="w-3 h-3" />
-      <span>{sedeAttiva.citta}</span>
+      <span>{sedeAttiva.comune}</span>
     </div>
   )
 }

@@ -30,7 +30,7 @@ export default function AssegnaContrattoModal({ onClose, onSuccess }) {
           id,
           codice_cliente,
           ragione_sociale,
-          citta,
+          comune,
           provincia,
           contratti:contratti(id, stato)
         `)
@@ -68,7 +68,7 @@ export default function AssegnaContrattoModal({ onClose, onSuccess }) {
     return (
       cliente.ragione_sociale?.toLowerCase().includes(search) ||
       cliente.codice_cliente?.toLowerCase().includes(search) ||
-      cliente.citta?.toLowerCase().includes(search)
+      cliente.comune?.toLowerCase().includes(search)
     )
   })
 
@@ -322,10 +322,10 @@ export default function AssegnaContrattoModal({ onClose, onSuccess }) {
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <span>{cliente.codice_cliente}</span>
-                        {cliente.citta && (
+                        {cliente.comune && (
                           <>
                             <span className="text-gray-400">•</span>
-                            <span>{cliente.citta} {cliente.provincia && `(${cliente.provincia})`}</span>
+                            <span>{cliente.comune} {cliente.provincia && `(${cliente.provincia})`}</span>
                           </>
                         )}
                       </div>

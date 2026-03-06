@@ -62,7 +62,7 @@ export async function POST(request) {
           partita_iva: datiAziendali.partita_iva,
           codice_fiscale: datiAziendali.codice_fiscale,
           via: datiAziendali.indirizzo,
-          citta: datiAziendali.citta,
+          comune: datiAziendali.comune,
           cap: datiAziendali.cap,
           provincia: datiAziendali.provincia,
           telefono_principale: datiAziendali.telefono,
